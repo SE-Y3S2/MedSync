@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: patient-management
+  namespace: medsync
+  labels:
+    app: patient-management
+spec:
+  selector:
+    app: patient-management
+  ports:
+  - port: 3001
+    targetPort: 3001
+    name: http
+  type: ClusterIP

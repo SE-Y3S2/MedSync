@@ -1,0 +1,85 @@
+version: '3.8'
+
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+
+  patient-management:
+    build: ./backend/services/patient-management
+    ports:
+      - "3001:3001"
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+
+  doctor-management:
+    build: ./backend/services/doctor-management
+    ports:
+      - "3002:3002"
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+
+  appointment:
+    build: ./backend/services/appointment
+    ports:
+      - "3003:3003"
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+
+  telemedicine:
+    build: ./backend/services/telemedicine
+    ports:
+      - "3004:3004"
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+
+  payment:
+    build: ./backend/services/payment
+    ports:
+      - "3005:3005"
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+
+  notification:
+    build: ./backend/services/notification
+    ports:
+      - "3006:3006"
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BROKERS=kafka:9092
+
+  ai-symptom-checker:
+    build: ./backend/services/ai-symptom-checker
+    ports:
+      - "3007:3007"
+    depends_on:
+      - kafka
+    environment:
+      - KAFKA_BROKERS=kafka:9092

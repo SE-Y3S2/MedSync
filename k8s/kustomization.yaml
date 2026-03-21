@@ -1,0 +1,35 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: medsync
+
+resources:
+  - namespace.yaml
+  - zookeeper/deployment.yaml
+  - zookeeper/service.yaml
+  - kafka/deployment.yaml
+  - kafka/service.yaml
+  - patient-management/deployment.yaml
+  - doctor-management/deployment.yaml
+  - appointment/deployment.yaml
+  - telemedicine/deployment.yaml
+  - payment/deployment.yaml
+  - notification/deployment.yaml
+  - ai-symptom-checker/deployment.yaml
+  - ingress.yaml
+
+images:
+  - name: patient-management
+    newTag: latest
+  - name: doctor-management
+    newTag: latest
+  - name: appointment
+    newTag: latest
+  - name: telemedicine
+    newTag: latest
+  - name: payment
+    newTag: latest
+  - name: notification
+    newTag: latest
+  - name: ai-symptom-checker
+    newTag: latest

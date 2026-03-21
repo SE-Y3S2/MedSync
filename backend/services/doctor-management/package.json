@@ -1,0 +1,14 @@
+{
+  "name": "doctor-management-service",
+  "version": "1.0.0",
+  "description": "Doctor Management Service for MedSync",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "kafkajs": "^2.2.4",
+    "mongoose": "^7.5.0"
+  }
+}
