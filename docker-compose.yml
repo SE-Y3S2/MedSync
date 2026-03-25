@@ -21,6 +21,18 @@ services:
     ports:
       - "9092:9092"
 
+  doctor-db:
+    image: mongo:6.0
+    ports:
+      - "27017:27017"
+    volumes:
+      - doctor-db-data:/data/db
+
+  telemedicine-redis:
+    image: redis:7.0-alpine
+    ports:
+      - "6379:6379"
+
   patient-management:
     build: ./backend/services/patient-management
     ports:
@@ -36,8 +48,10 @@ services:
       - "3002:3002"
     depends_on:
       - kafka
+      - doctor-db
     environment:
       - KAFKA_BROKERS=kafka:9092
+      - MONGO_URI=mongodb://doctor-db:27017/doctor_db
 
   appointment:
     build: ./backend/services/appointment
@@ -54,8 +68,11 @@ services:
       - "3004:3004"
     depends_on:
       - kafka
+      - telemedicine-redis
     environment:
       - KAFKA_BROKERS=kafka:9092
+      - REDIS_HOST=telemedicine-redis
+      - REDIS_PORT=6379
 
   payment:
     build: ./backend/services/payment
@@ -83,3 +100,6 @@ services:
       - kafka
     environment:
       - KAFKA_BROKERS=kafka:9092
+
+volumes:
+  doctor-db-data:
