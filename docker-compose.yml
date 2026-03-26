@@ -28,6 +28,13 @@ services:
     volumes:
       - doctor-db-data:/data/db
 
+  appointment-db:
+    image: mongo:6.0
+    ports:
+      - "27018:27017"
+    volumes:
+      - appointment-db-data:/data/db
+
   telemedicine-redis:
     image: redis:7.0-alpine
     ports:
@@ -59,8 +66,12 @@ services:
       - "3003:3003"
     depends_on:
       - kafka
+      - appointment-db
     environment:
       - KAFKA_BROKERS=kafka:9092
+      - MONGO_URI=mongodb://appointment-db:27017/appointment_db
+      - DOCTOR_SERVICE_URL=http://doctor-management:3002
+      - PORT=3003
 
   telemedicine:
     build: ./backend/services/telemedicine
@@ -103,3 +114,4 @@ services:
 
 volumes:
   doctor-db-data:
+  appointment-db-data:
