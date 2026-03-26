@@ -40,14 +40,30 @@ services:
     ports:
       - "6379:6379"
 
+  patient-db:
+    image: mongo:6.0
+    ports:
+      - "27019:27017"
+    volumes:
+      - patient-db-data:/data/db
+
+  ai-db:
+    image: mongo:6.0
+    ports:
+      - "27020:27017"
+    volumes:
+      - ai-db-data:/data/db
+
   patient-management:
     build: ./backend/services/patient-management
     ports:
       - "3001:3001"
     depends_on:
       - kafka
+      - patient-db
     environment:
       - KAFKA_BROKERS=kafka:9092
+      - MONGO_URI=mongodb://patient-db:27017/patient_db
 
   doctor-management:
     build: ./backend/services/doctor-management
@@ -109,9 +125,24 @@ services:
       - "3007:3007"
     depends_on:
       - kafka
+      - ai-db
     environment:
       - KAFKA_BROKERS=kafka:9092
+      - MONGO_URI=mongodb://ai-db:27017/ai_db
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_PATIENT_SERVICE_URL=http://localhost:3001/api/patients
+      - NEXT_PUBLIC_SYMPTOM_CHECKER_URL=http://localhost:3007/api/symptom-checker
+    depends_on:
+      - patient-management
+      - ai-symptom-checker
 
 volumes:
   doctor-db-data:
   appointment-db-data:
+  patient-db-data:
+  ai-db-data:
