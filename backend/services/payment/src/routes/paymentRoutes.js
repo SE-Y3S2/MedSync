@@ -1,0 +1,20 @@
+const express = require('express');
+const router = express.Router();
+const ctrl = require('../controllers/paymentController');
+const auth = require('../middleware/auth');
+
+// ── Stripe Webhook ─────────────────────────────────────────────────────────
+// IMPORTANT: must use raw body — declared in app.js before json middleware
+router.post('/webhook', ctrl.handleWebhook);
+
+// ── Protected Routes ───────────────────────────────────────────────────────
+// Create a Stripe Checkout session for an appointment
+router.post('/checkout', auth, ctrl.createCheckoutSession);
+
+// Payment history for a patient
+router.get('/patient/:id', auth, ctrl.getPatientPaymentHistory);
+
+// Payment details for a specific appointment
+router.get('/:appointmentId', auth, ctrl.getPaymentByAppointment);
+
+module.exports = router;

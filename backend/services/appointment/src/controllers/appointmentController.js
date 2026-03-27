@@ -4,8 +4,18 @@ const axios = require('axios');
 const DOCTOR_SERVICE_URL =
     process.env.DOCTOR_SERVICE_URL || 'http://localhost:3002';
 
-// Doctor Search 
-exports.searchDoctors = async (req, res) => {
+// ─── Valid status transitions ───────────────────────────────────────────────
+// Maps current status → allowed next statuses
+const STATUS_TRANSITIONS = {
+    pending: ['confirmed', 'rejected', 'cancelled'],
+    confirmed: ['completed', 'cancelled'],
+    completed: [],
+    rejected: [],
+    cancelled: [],
+};
+
+// ── Doctor Search ────────────────────────────────────────────────────────────
+exports.searchDoctors = async (req, res, next) => {
     try {
         const { specialty } = req.query;
         const url = `${DOCTOR_SERVICE_URL}/api/doctors${specialty ? `?specialty=${encodeURIComponent(specialty)}` : ''
@@ -17,27 +27,18 @@ exports.searchDoctors = async (req, res) => {
     }
 };
 
-// Book Appointment 
-exports.createAppointment = async (req, res) => {
+// ── Book Appointment ─────────────────────────────────────────────────────────
+exports.createAppointment = async (req, res, next) => {
     try {
         const {
-            patientId,
-            patientName,
-            patientEmail,
-            doctorId,
-            doctorName,
-            specialty,
-            slotDate,
-            slotTime,
-            reason,
-            consultationFee,
+            patientId, patientName, patientEmail,
+            doctorId, doctorName, specialty,
+            slotDate, slotTime, reason, consultationFee,
         } = req.body;
 
         // Prevent double-booking the same slot
         const conflict = await Appointment.findOne({
-            doctorId,
-            slotDate,
-            slotTime,
+            doctorId, slotDate, slotTime,
             status: { $in: ['pending', 'confirmed'] },
         });
         if (conflict) {
@@ -45,37 +46,30 @@ exports.createAppointment = async (req, res) => {
         }
 
         const appointment = new Appointment({
-            patientId,
-            patientName,
-            patientEmail,
-            doctorId,
-            doctorName,
-            specialty,
-            slotDate,
-            slotTime,
-            reason,
-            consultationFee,
+            patientId, patientName, patientEmail,
+            doctorId, doctorName, specialty,
+            slotDate, slotTime, reason, consultationFee,
         });
         await appointment.save();
         res.status(201).json(appointment);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        next(error);
     }
 };
 
-// Get Single Appointment 
-exports.getAppointment = async (req, res) => {
+// ── Get Single Appointment ───────────────────────────────────────────────────
+exports.getAppointment = async (req, res, next) => {
     try {
         const appointment = await Appointment.findById(req.params.id);
         if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
         res.json(appointment);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
-// Patient's Appointments 
-exports.getPatientAppointments = async (req, res) => {
+// ── Patient's Appointments ───────────────────────────────────────────────────
+exports.getPatientAppointments = async (req, res, next) => {
     try {
         const { status } = req.query;
         const filter = { patientId: req.params.patientId };
@@ -83,12 +77,12 @@ exports.getPatientAppointments = async (req, res) => {
         const appointments = await Appointment.find(filter).sort({ slotDate: 1, slotTime: 1 });
         res.json(appointments);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
-// Doctor's Appointments 
-exports.getDoctorAppointments = async (req, res) => {
+// ── Doctor's Appointments ────────────────────────────────────────────────────
+exports.getDoctorAppointments = async (req, res, next) => {
     try {
         const { status, date } = req.query;
         const filter = { doctorId: req.params.doctorId };
@@ -97,26 +91,24 @@ exports.getDoctorAppointments = async (req, res) => {
         const appointments = await Appointment.find(filter).sort({ slotDate: 1, slotTime: 1 });
         res.json(appointments);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
-// Update Appointment Status 
-exports.updateStatus = async (req, res) => {
+// ── Update Appointment Status ─────────────────────────────────────────────────
+exports.updateStatus = async (req, res, next) => {
     try {
         const { status, cancelledBy, cancellationReason, notes } = req.body;
-
-        const allowed = ['pending', 'confirmed', 'cancelled', 'completed', 'rejected'];
-        if (!allowed.includes(status)) {
-            return res.status(400).json({ message: `Invalid status. Must be one of: ${allowed.join(', ')}` });
-        }
 
         const appointment = await Appointment.findById(req.params.id);
         if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
 
-        // Guard: can only cancel a pending/confirmed appointment
-        if (status === 'cancelled' && !['pending', 'confirmed'].includes(appointment.status)) {
-            return res.status(400).json({ message: 'Cannot cancel an appointment that is not pending or confirmed.' });
+        // Enforce lifecycle transitions
+        const allowed = STATUS_TRANSITIONS[appointment.status] || [];
+        if (!allowed.includes(status)) {
+            return res.status(400).json({
+                message: `Cannot transition from '${appointment.status}' to '${status}'. Allowed: [${allowed.join(', ') || 'none'}]`,
+            });
         }
 
         appointment.status = status;
@@ -127,21 +119,26 @@ exports.updateStatus = async (req, res) => {
         await appointment.save();
         res.json(appointment);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        next(error);
     }
 };
 
-// Update Payment Status 
-exports.updatePaymentStatus = async (req, res) => {
+// ── Update Payment Status (called by Payment Service) ────────────────────────
+exports.updatePaymentStatus = async (req, res, next) => {
     try {
         const { paymentStatus, paymentId } = req.body;
         const appointment = await Appointment.findById(req.params.id);
         if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
 
+        const allowed = ['unpaid', 'paid', 'refunded'];
+        if (!allowed.includes(paymentStatus)) {
+            return res.status(400).json({ message: `Invalid paymentStatus. Must be: ${allowed.join(', ')}` });
+        }
+
         appointment.paymentStatus = paymentStatus;
         if (paymentId) appointment.paymentId = paymentId;
 
-        // Auto-confirm once paid
+        // Auto-confirm once paid (if still pending)
         if (paymentStatus === 'paid' && appointment.status === 'pending') {
             appointment.status = 'confirmed';
         }
@@ -149,18 +146,21 @@ exports.updatePaymentStatus = async (req, res) => {
         await appointment.save();
         res.json(appointment);
     } catch (error) {
-        res.status(400).json({ message: error.message });
+        next(error);
     }
 };
 
-// Cancel Appointment 
-exports.cancelAppointment = async (req, res) => {
+// ── Cancel Appointment ────────────────────────────────────────────────────────
+exports.cancelAppointment = async (req, res, next) => {
     try {
         const { cancelledBy, cancellationReason } = req.body;
         const appointment = await Appointment.findById(req.params.id);
         if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
+
         if (!['pending', 'confirmed'].includes(appointment.status)) {
-            return res.status(400).json({ message: 'Only pending or confirmed appointments can be cancelled.' });
+            return res.status(400).json({
+                message: 'Only pending or confirmed appointments can be cancelled.',
+            });
         }
 
         appointment.status = 'cancelled';
@@ -169,12 +169,12 @@ exports.cancelAppointment = async (req, res) => {
         await appointment.save();
         res.json({ message: 'Appointment cancelled successfully', appointment });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
-// Get Available Slots for a Doctor 
-exports.getBookedSlots = async (req, res) => {
+// ── Get Booked Slots for a Doctor ─────────────────────────────────────────────
+exports.getBookedSlots = async (req, res, next) => {
     try {
         const { date } = req.query;
         const filter = {
@@ -182,18 +182,17 @@ exports.getBookedSlots = async (req, res) => {
             status: { $in: ['pending', 'confirmed'] },
         };
         if (date) filter.slotDate = date;
-
         const booked = await Appointment.find(filter, 'slotDate slotTime -_id');
         res.json(booked);
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };
 
-// Stats (dashboard summary)    
-exports.getDoctorStats = async (req, res) => {
+// ── Doctor Dashboard Stats ────────────────────────────────────────────────────
+exports.getDoctorStats = async (req, res, next) => {
     try {
-        const doctorId = req.params.doctorId;
+        const { doctorId } = req.params;
         const [total, pending, confirmed, completed, cancelled] = await Promise.all([
             Appointment.countDocuments({ doctorId }),
             Appointment.countDocuments({ doctorId, status: 'pending' }),
@@ -203,6 +202,6 @@ exports.getDoctorStats = async (req, res) => {
         ]);
         res.json({ total, pending, confirmed, completed, cancelled });
     } catch (error) {
-        res.status(500).json({ message: error.message });
+        next(error);
     }
 };

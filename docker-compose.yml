@@ -35,6 +35,13 @@ services:
     volumes:
       - appointment-db-data:/data/db
 
+  payment-db:
+    image: mongo:6.0
+    ports:
+      - "27019:27017"
+    volumes:
+      - payment-db-data:/data/db
+
   telemedicine-redis:
     image: redis:7.0-alpine
     ports:
@@ -91,8 +98,12 @@ services:
       - "3005:3005"
     depends_on:
       - kafka
+      - payment-db
     environment:
       - KAFKA_BROKERS=kafka:9092
+      - MONGO_URI=mongodb://payment-db:27017/payment_db
+      - APPOINTMENT_SERVICE_URL=http://appointment:3003
+      - FRONTEND_URL=http://localhost:3000
 
   notification:
     build: ./backend/services/notification
@@ -115,3 +126,4 @@ services:
 volumes:
   doctor-db-data:
   appointment-db-data:
+  payment-db-data:

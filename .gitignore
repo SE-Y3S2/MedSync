@@ -1,0 +1,8 @@
+backend/services/appointment/.env.example
+backend/services/payment/.env.example
+docker-compose.yml
+backend/services/appointment/.env
+backend/services/payment/.env
+frontend
+backend/services/appointment/node_modules
+backend/services/payment/node_modules
