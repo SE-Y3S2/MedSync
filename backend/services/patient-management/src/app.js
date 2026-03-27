@@ -1,10 +1,21 @@
 const express = require('express');
+const cors = require('cors');
+const path = require('path');
 const app = express();
+const patientRoutes = require('./routes/patientRoutes');
 
+// Middleware
+app.use(cors());
 app.use(express.json());
 
+// Serve static uploads
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// Patient routes
+app.use('/api/patients', patientRoutes);
+
 app.get('/', (req, res) => {
-  res.send('Patient Management Service is running');
+  res.json({ service: 'Patient Management Service', status: 'running' });
 });
 
 module.exports = app;
