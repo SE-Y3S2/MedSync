@@ -64,6 +64,7 @@ services:
     environment:
       - KAFKA_BROKERS=kafka:9092
       - MONGO_URI=mongodb://patient-db:27017/patient_db
+      - JWT_SECRET=medsync-secret-key-2026
 
   doctor-management:
     build: ./backend/services/doctor-management
