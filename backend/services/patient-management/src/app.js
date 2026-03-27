@@ -1,10 +1,18 @@
 const express = require('express');
+const cors = require('cors');
+
 const app = express();
 
+// Middleware
+app.use(cors());
 app.use(express.json());
 
+// Health check
 app.get('/', (req, res) => {
-  res.send('Patient Management Service is running');
+  res.json({ service: 'Patient Management Service', status: 'running' });
 });
+
+// TODO: Add your routes here
+// app.use('/api/patients', patientRoutes);
 
 module.exports = app;

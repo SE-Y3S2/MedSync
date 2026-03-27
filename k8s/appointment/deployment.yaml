@@ -21,30 +21,30 @@ spec:
         ports:
         - containerPort: 3003
         env:
-        - name: PORT
-          value: "3003"
         - name: KAFKA_BROKERS
           value: "kafka:9092"
+        - name: MONGO_URI
+          value: "mongodb://mongo:27017/appointment_db"
+        - name: PORT
+          value: "3003"
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
             memory: "256Mi"
-            cpu: "200m"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: appointment
   namespace: medsync
-  labels:
-    app: appointment
 spec:
   selector:
     app: appointment
   ports:
-  - port: 3003
+  - protocol: TCP
+    port: 3003
     targetPort: 3003
-    name: http
   type: ClusterIP

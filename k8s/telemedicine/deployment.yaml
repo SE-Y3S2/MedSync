@@ -21,30 +21,32 @@ spec:
         ports:
         - containerPort: 3004
         env:
-        - name: PORT
-          value: "3004"
         - name: KAFKA_BROKERS
           value: "kafka:9092"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: PORT
+          value: "3004"
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
             memory: "256Mi"
-            cpu: "200m"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: telemedicine
   namespace: medsync
-  labels:
-    app: telemedicine
 spec:
   selector:
     app: telemedicine
   ports:
-  - port: 3004
+  - protocol: TCP
+    port: 3004
     targetPort: 3004
-    name: http
   type: ClusterIP

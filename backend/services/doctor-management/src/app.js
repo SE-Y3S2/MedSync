@@ -1,22 +1,18 @@
 const express = require('express');
-const connectDB = require('./config/db');
-const doctorRoutes = require('./routes/doctorRoutes');
-const availabilityRoutes = require('./routes/availabilityRoutes');
-const prescriptionRoutes = require('./routes/prescriptionRoutes');
+const cors = require('cors');
 
 const app = express();
 
-// Connect to Database
-connectDB();
-
+// Middleware
+app.use(cors());
 app.use(express.json());
 
-app.use('/api/doctors', doctorRoutes);
-app.use('/api/doctors/:id/availability', availabilityRoutes);
-app.use('/api/prescriptions', prescriptionRoutes);
-
+// Health check
 app.get('/', (req, res) => {
-  res.send('Doctor Management Service is running');
+  res.json({ service: 'Doctor Management Service', status: 'running' });
 });
+
+// TODO: Add your routes here
+// app.use('/api/doctors', doctorRoutes);
 
 module.exports = app;
