@@ -8,6 +8,8 @@ import { useAuth } from '../context/AuthContext';
 
 const navItems = [
   { href: '/', label: 'Dashboard', icon: '🏠' },
+  { href: '/appointment/search', label: 'Find Doctors', icon: '🔍' },
+  { href: '/appointment', label: 'My Appointments', icon: '📅' },
   { href: '/patient/profile', label: 'My Profile', icon: '👤' },
   { href: '/patient/records', label: 'Records & Documents', icon: '📋' },
   { href: '/symptom-checker', label: 'AI Symptom Checker', icon: '🤖' },
@@ -73,7 +75,26 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 </button>
               </div>
             ) : (
-              <p>Not signed in</p>
+              <div style={{ textAlign: 'center' }}>
+                <p style={{ color: 'rgba(255,255,255,0.6)', fontSize: '0.8rem', marginBottom: '12px' }}>Not signed in</p>
+                <Link href="/login" style={{ width: '100%', display: 'block' }}>
+                  <button
+                    style={{
+                      background: 'var(--turquoise)',
+                      border: 'none',
+                      color: '#fff',
+                      padding: '8px 16px',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      fontSize: '0.9rem',
+                      fontWeight: 600,
+                      width: '100%'
+                    }}
+                  >
+                    Login / Join
+                  </button>
+                </Link>
+              </div>
             )}
             <p style={{ marginTop: '12px' }}>© 2026 MedSync</p>
           </div>

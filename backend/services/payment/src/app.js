@@ -14,14 +14,16 @@ app.use(cors());
 app.use(morgan('dev'));
 
 // CRITICAL: Stripe webhook needs the raw request body for signature verification.
-// Mount webhook route BEFORE express.json() parses the body.
-app.use(
-  '/api/payments/webhook',
-  express.raw({ type: 'application/json' })
-);
+app.use('/api/payments/webhook', express.raw({ type: 'application/json' }));
 
-// All other routes use parsed JSON
-app.use(express.json());
+// All other routes use parsed JSON (exclude webhook)
+app.use((req, res, next) => {
+  if (req.originalUrl === '/api/payments/webhook') {
+    next();
+  } else {
+    express.json()(req, res, next);
+  }
+});
 
 // ── Routes ──────────────────────────────────────────────────────────────────
 app.use('/api/payments', paymentRoutes);

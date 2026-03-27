@@ -46,8 +46,8 @@ exports.createCheckoutSession = async (req, res, next) => {
                 },
             ],
             metadata: { appointmentId, patientId, doctorId },
-            success_url: `${FRONTEND_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}`,
-            cancel_url: `${FRONTEND_URL}/payment-cancel?appointmentId=${appointmentId}`,
+            success_url: `${FRONTEND_URL}/payment/success?session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${FRONTEND_URL}/payment/cancel?appointmentId=${appointmentId}`,
         });
 
         // Persist pending payment record

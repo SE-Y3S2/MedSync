@@ -8,6 +8,7 @@ const { createAppointmentRules, updateStatusRules } = require('../middleware/val
 
 // Doctor search (proxy to doctor-management service)
 router.get('/search-doctors', ctrl.searchDoctors);
+router.get('/search-doctors/:id', ctrl.getDoctorDetails);
 
 // Booked slots for a doctor (used by booking calendar)
 router.get('/available-slots/:doctorId', ctrl.getBookedSlots);

@@ -27,6 +27,18 @@ exports.searchDoctors = async (req, res, next) => {
     }
 };
 
+// ── Doctor Details ────────────────────────────────────────────────────────────
+exports.getDoctorDetails = async (req, res, next) => {
+    try {
+        const { id } = req.params;
+        const url = `${DOCTOR_SERVICE_URL}/api/doctors/${id}`;
+        const { data } = await axios.get(url);
+        res.json(data);
+    } catch (error) {
+        res.status(502).json({ message: 'Could not reach doctor service', error: error.message });
+    }
+};
+
 // ── Book Appointment ─────────────────────────────────────────────────────────
 exports.createAppointment = async (req, res, next) => {
     try {
@@ -39,7 +51,7 @@ exports.createAppointment = async (req, res, next) => {
         // Prevent double-booking the same slot
         const conflict = await Appointment.findOne({
             doctorId, slotDate, slotTime,
-            status: { $in: ['pending', 'confirmed'] },
+            status: { $in: ['pending', 'confirmed', 'completed'] },
         });
         if (conflict) {
             return res.status(409).json({ message: 'This slot is already booked.' });
@@ -68,9 +80,27 @@ exports.getAppointment = async (req, res, next) => {
     }
 };
 
-// ── Patient's Appointments ───────────────────────────────────────────────────
+// ── Patient's Appointments (with auto-cancel check) ───────────────────────────
 exports.getPatientAppointments = async (req, res, next) => {
     try {
+        // Auto-cancel unpaid pending appointments older than 30 mins
+        const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
+        await Appointment.updateMany(
+            {
+                patientId: req.params.patientId,
+                status: 'pending',
+                paymentStatus: 'unpaid',
+                createdAt: { $lt: thirtyMinsAgo }
+            },
+            {
+                $set: {
+                    status: 'cancelled',
+                    cancelledBy: 'system',
+                    cancellationReason: 'Payment timeout (30 minutes)'
+                }
+            }
+        );
+
         const { status } = req.query;
         const filter = { patientId: req.params.patientId };
         if (status) filter.status = status;
@@ -179,7 +209,7 @@ exports.getBookedSlots = async (req, res, next) => {
         const { date } = req.query;
         const filter = {
             doctorId: req.params.doctorId,
-            status: { $in: ['pending', 'confirmed'] },
+            status: { $in: ['pending', 'confirmed', 'completed'] },
         };
         if (date) filter.slotDate = date;
         const booked = await Appointment.find(filter, 'slotDate slotTime -_id');
