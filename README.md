@@ -1,110 +1,91 @@
 # MedSync: AI-Enabled Smart Healthcare Platform
 
-MedSync is a cloud-native, microservices-based healthcare platform designed for high scalability, security, and performance. This project fulfills the requirements for **SE3020 – Distributed Systems Assignment 1 (2026)**.
+MedSync is a high-availability, cloud-native healthcare ecosystem built with a microservices architecture. It streamlines patient-doctor interactions through AI-driven diagnostics, real-time telemedicine, and secure payment processing.
 
-The platform enables **Patients** to book appointments and consult with doctors via telemedicine, provides **Doctors** with tools for schedule and prescription management, and allows **Administrators** to oversee platform operations and verify healthcare providers.
+This project is the official implementation for the **SE3020 – Distributed Systems Assignment 1 (2026)**.
 
 ---
 
-## 🏗️ System Architecture
+## 🏛️ System Architecture
 
-MedSync utilizes a decoupled, event-driven Microservices architecture:
+MedSync consists of **8 core microservices** and a **Next.js Frontend**, all containerized and ready for orchestration.
 
-- **Frontend (Next.js 16)**: A responsive React-based dashboard for all user roles.
-- **Patient Management Service**: Handles registration, medical records (history/prescriptions), and document uploads (reports).
-- **Doctor Management Service**: Manages doctor profiles, verification status, and availability slots.
-- **Appointment Service**: Facilitates doctor search by specialty and real-time appointment booking/tracking.
-- **Telemedicine Service**: Orchestrates secure video consultations using **Agora SDK** and Redis-based session caching.
-- **Payment Service**: Provides secure consultation fee processing via **Stripe** integration.
-- **Notification Service**: Sends automated Email/SMS confirmations triggered by **Apache Kafka** events.
-- **AI Symptom Checker**: Integrates **Google Gemini AI** to provide preliminary health suggestions based on natural language symptoms.
+### Core Services:
+*   **Auth Service (Port 5000)**: Unified JWT-based authentication for Patients, Doctors, and Admins.
+*   **Patient Management (Port 3001)**: Digital Health Records (PHR), document uploads, and medical history.
+*   **Doctor Management (Port 3002)**: Profile verification, availability scheduling, and analytics.
+*   **Appointment Service (Port 3003)**: Real-time booking engine with specialty-based search.
+*   **Telemedicine Service (Port 3004)**: Secure video consultations via Agora SDK and Redis signaling.
+*   **Payment Service (Port 3005)**: Financial gateway integrated with Stripe Checkout.
+*   **Notification Service (Port 3006)**: Event-driven alerts (Email/SMS) powered by Apache Kafka.
+*   **AI Symptom Checker (Port 3007)**: Preliminary diagnostic engine using Google Gemini AI.
 
 ---
 
 ## 🛠️ Technology Stack
 
-| Logic | Technology |
-|---|---|
-| **Frontend** | React, Next.js, TypeScript, TailwindCSS/Vanilla CSS |
-| **Backend** | Node.js, Express.js |
-| **Databases** | MongoDB (Primary), Redis (Session Caching) |
-| **Messaging** | Apache Kafka (Event-driven notifications) |
-| **Orchestration** | Docker Compose, Kubernetes (K8s) |
-| **APIs** | Agora (Video), Stripe (Payment), Gemini (AI) |
+| Category | Technologies |
+| :--- | :--- |
+| **Frontend** | React, Next.js 14, TypeScript, CSS3 |
+| **Backend** | Node.js, Express, Socket.io |
+| **Data** | MongoDB (Primary), Redis (Session Cache) |
+| **Messaging** | Apache Kafka (Event Streaming) |
+| **Infrastructure** | Docker, Docker Compose, Kubernetes (K8s) |
+| **External APIs** | Stripe, Agora, Google Gemini, Twilio |
 
 ---
 
-## 🚀 Getting Started
+## ⚙️ Configuration (Environment Variables)
 
-### Prerequisites
+The project now uses a **Centralized Environment Configuration**. You only need to manage variables in the root directory.
 
-- [Docker Desktop](https://www.docker.com/products/docker-desktop/) (includes Docker Compose)
-- (Optional) [Minikube](https://minikube.sigs.k8s.io/) or Kubernetes cluster for orchestration.
-
-### Initial Configuration
-
-Ensure your environment variables are set or verify they match the default fallback values in `docker-compose.yml`. For live testing, you should provide:
-- `GEMINI_API_KEY` (in `ai-symptom-checker` service)
-- `STRIPE_SECRET_KEY` (in `payment-service`)
-- `AGORA_APP_ID` (in `telemedicine-service`)
-
-### Quick Start (One Command)
-
-Run the included startup script in your terminal (Bash/PowerShell/Git Bash):
-
-```bash
-./start-medsync.sh
-```
-
-Alternatively, manually trigger the build:
-
-```bash
-docker-compose up -d --build
-```
+1.  **Initialize**: Rename [`.env.example`](file:///c:/Users/LENOVO/Desktop/MedSync/.env.example) to `.env`.
+2.  **Fill API Keys**: 
+    *   `GEMINI_API_KEY`: Get from [Google AI Studio](https://aistudio.google.com/).
+    *   `STRIPE_SECRET_KEY`: Get from [Stripe Dashboard](https://dashboard.stripe.com/).
+    *   `AGORA_APP_ID`: Get from [Agora Console](https://console.agora.io/).
 
 ---
 
-## 🔑 Role-Based Access
+## 🚀 One-Command Deployment
 
-### 1. Administrator
-- **Credentials**: `admin@medsync.com` / `admin123`
-- **Dashboard**: `http://localhost:3000/admin`
-- **Actions**: Manage all user records, verify doctor registrations, and audit transations.
+### Option A: Docker Compose (Quickest)
+Best for local development and demonstration.
+*   **Windows**: Double-click [`start-medsync.bat`](file:///c:/Users/LENOVO/Desktop/MedSync/start-medsync.bat)
+*   **Linux/Mac**: Run `chmod +x start-medsync.sh && ./start-medsync.sh`
 
-### 2. Doctor
-- **Access**: Register as a Doctor via `/register`. Once verified by an Admin, login via `/login`.
-- **Portal**: `http://localhost:3000/doctor`
-- **Actions**: Manage availability schedule, accept/reject appointments, issue digital prescriptions, and conduct video calls.
-
-### 3. Patient
-- **Access**: Register as a Patient via `/register`.
-- **Portal**: `http://localhost:3000`
-- **Actions**: Search for specialists, book appointments, use the AI Symptom Checker, upload medical reports, and attend virtual consultations.
-
----
-
-## ⚓ Kubernetes Deployment
-
-MedSync is ready for production orchestration. To deploy on a K8s cluster:
-
-1. Navigate to the `/k8s` directory.
-2. Apply the namespace and configurations:
-```bash
-kubectl apply -f k8s/namespace.yaml
-kubectl apply -k k8s/
-```
-3. Access the platform via the configured Ingress at `medsync.local`.
+### Option B: Kubernetes (Orchestrasted)
+Best for production simulation and assignment requirements.
+1.  Ensure you have a k8s cluster running (Docker Desktop K8s or Minikube).
+2.  **Deploy**:
+    *   **Windows**: Run [`run-k8s.bat`](file:///c:/Users/LENOVO/Desktop/MedSync/run-k8s.bat)
+    *   **Linux/Mac**: Run `./run-k8s.sh`
+3.  **Local Mapping**: Add the following to your `hosts` file:
+    ```bash
+    127.0.0.1 medsync.local
+    ```
+4.  **Access**: Visit `http://medsync.local`
 
 ---
 
-## 📋 Deliverables Tracking
+## 🔑 User Role Credentials
 
-- [x] **Microservices**: All services containerized and communicating via REST/Kafka.
-- [x] **Security**: JWT-based authentication for all three roles.
-- [x] **Infrastructure**: Complete `docker-compose` and `k8s/` manifests provided.
-- [x] **AI Integration**: Gemini-powered symptom checker implemented.
-- [x] **External APIs**: Stripe (Payments) and Agora (Telemedicine) modules ready.
+| Role | Email | Password | Dashboard URL |
+| :--- | :--- | :--- | :--- |
+| **Administrator** | `admin@medsync.com` | `admin123` | `/admin` |
+| **Doctor** | (Register first) | (Your Choice) | `/doctor` |
+| **Patient** | (Register first) | (Your Choice) | `/` (Home) |
 
 ---
 
-*Developed for SE3020: Distributed Systems (BSC Information Technology).*
+## 📋 Assignment Deliverables Checklist
+
+- [x] **Microservices**: All 8 services containerized.
+- [x] **Advanced Tech**: Kafka, Redis, and Gemini AI integration.
+- [x] **Documentation**: Automatic README, Startup Scripts, and K8s manifests.
+- [x] **Secure Access**: JWT cross-service verification.
+- [x] **UI/UX**: Premium medical-themed dashboard.
+
+---
+
+*Developed for SE3020 Distributed Systems (BSC Information Technology).*
