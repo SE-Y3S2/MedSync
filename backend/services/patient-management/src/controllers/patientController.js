@@ -79,6 +79,31 @@ exports.login = async (req, res) => {
   }
 };
 
+// ───── Admin Auth ─────
+
+exports.adminLogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    // Hardcoded Admin for the assignment requirements
+    if (email === 'admin@medsync.com' && password === 'admin123') {
+      const token = jwt.sign(
+        { email, role: 'admin' },
+        JWT_SECRET,
+        { expiresIn: '7d' }
+      );
+      return res.status(200).json({ 
+        token, 
+        admin: { email, name: 'Super Admin', role: 'admin' } 
+      });
+    }
+
+    return res.status(401).json({ message: 'Invalid admin credentials.' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // ───── Profile Management ─────
 
 // Get authenticated patient's profile
@@ -164,13 +189,16 @@ exports.addMedicalRecord = async (req, res) => {
   }
 };
 
-// Add a prescription
+// Add a prescription (Original Patient use-case)
 exports.addPrescription = async (req, res) => {
   try {
     const { medication, dosage, frequency, duration, instructions, prescribedBy, date } = req.body;
     if (!medication || !dosage) return res.status(400).json({ message: 'Medication and dosage are required.' });
 
-    const patient = await Patient.findById(req.user.patientId);
+    const patientId = req.user.patientId;
+    if (!patientId) return res.status(401).json({ message: 'Patient not authenticated' });
+
+    const patient = await Patient.findById(patientId);
     if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
     const prescription = { medication, dosage, frequency, duration, instructions, prescribedBy };
@@ -178,6 +206,42 @@ exports.addPrescription = async (req, res) => {
 
     patient.prescriptions.push(prescription);
     await patient.save();
+
+    res.status(201).json(patient.prescriptions[patient.prescriptions.length - 1]);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Doctor issues a prescription to a patient
+exports.doctorIssuePrescription = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const { medication, dosage, frequency, duration, instructions, prescribedBy, date } = req.body;
+
+    if (!req.user.doctorId && req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Forbidden. Only doctors can issue prescriptions.' });
+    }
+
+    if (!medication || !dosage) return res.status(400).json({ message: 'Medication and dosage are required.' });
+
+    const patient = await Patient.findById(patientId);
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
+
+    const prescription = { medication, dosage, frequency, duration, instructions, prescribedBy };
+    if (date) prescription.date = date;
+
+    patient.prescriptions.push(prescription);
+    await patient.save();
+
+    // Emit Kafka event
+    await sendEvent('patient-events', {
+      type: 'PRESCRIPTION_ISSUED',
+      patientId: patient._id,
+      prescribedBy: prescribedBy,
+      medication,
+      timestamp: new Date()
+    });
 
     res.status(201).json(patient.prescriptions[patient.prescriptions.length - 1]);
   } catch (error) {

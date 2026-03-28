@@ -9,6 +9,7 @@ import Link from 'next/link';
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [role, setRole] = useState<'patient' | 'doctor' | 'admin'>('patient');
     const [loading, setLoading] = useState(false);
     const { login } = useAuth();
     const router = useRouter();
@@ -17,9 +18,11 @@ export default function LoginPage() {
         e.preventDefault();
         setLoading(true);
         try {
-            await login(email, password);
-            showToast('Welcome back to MedSync!', 'success');
-            router.push('/');
+            await login(email, password, role);
+            showToast(`Welcome back to MedSync! Logged in as ${role}.`, 'success');
+            if (role === 'admin') router.push('/admin');
+            else if (role === 'doctor') router.push('/doctor');
+            else router.push('/');
         } catch (err: any) {
             showToast(err.message || 'Login failed', 'error');
         } finally {
@@ -34,6 +37,16 @@ export default function LoginPage() {
                     <form onSubmit={handleSubmit}>
                         <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
                         <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
+                        
+                        <div className="med-input-group" style={{ marginTop: '16px' }}>
+                            <label className="med-label">Login As</label>
+                            <select className="med-input" value={role} onChange={(e) => setRole(e.target.value as any)}>
+                                <option value="patient">Patient</option>
+                                <option value="doctor">Doctor</option>
+                                <option value="admin">Administrator</option>
+                            </select>
+                        </div>
+
                         <Button type="submit" className="navy" disabled={loading} style={{ width: '100%', marginTop: '12px' }}>
                             {loading ? 'Entering...' : 'Login'}
                         </Button>

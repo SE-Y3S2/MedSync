@@ -11,7 +11,15 @@ const authMiddleware = (req, res, next) => {
 
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = { patientId: decoded.patientId, email: decoded.email };
+    
+    // Support multiple roles
+    req.user = {
+      patientId: decoded.patientId,
+      doctorId: decoded.doctorId,
+      email: decoded.email,
+      role: decoded.role || (decoded.patientId ? 'patient' : null)
+    };
+
     next();
   } catch (error) {
     return res.status(401).json({ message: 'Invalid or expired token.' });

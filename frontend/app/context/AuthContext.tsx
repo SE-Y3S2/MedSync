@@ -3,18 +3,18 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 
 interface AuthUser {
-  patientId: string;
+  id: string;
   email: string;
-  firstName: string;
-  lastName: string;
+  name: string;
+  role: 'patient' | 'doctor' | 'admin';
   token: string;
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
-  login: (email: string, password: string) => Promise<void>;
-  register: (data: any) => Promise<void>;
+  login: (email: string, password: string, role?: 'patient'|'doctor'|'admin') => Promise<void>;
+  register: (data: any, role?: 'patient'|'doctor') => Promise<void>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -39,8 +39,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password: string) => {
-    const response = await fetch(`${PATIENT_SERVICE_URL}/login`, {
+  const login = async (email: string, password: string, role = 'patient') => {
+    let url = `${PATIENT_SERVICE_URL}/login`;
+    if (role === 'admin') url = `${PATIENT_SERVICE_URL}/admin/login`;
+    if (role === 'doctor') url = `${process.env.NEXT_PUBLIC_DOCTOR_SERVICE_URL || 'http://localhost:3002/api/doctors'}/login`;
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password })
@@ -52,13 +56,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await response.json();
-    const authUser: AuthUser = {
-      patientId: data.patient._id,
-      email: data.patient.email,
-      firstName: data.patient.firstName,
-      lastName: data.patient.lastName,
-      token: data.token
-    };
+    let authUser: AuthUser;
+
+    if (role === 'doctor' && data.doctor) {
+      authUser = {
+        id: data.doctor._id,
+        email: data.doctor.contact.email,
+        name: data.doctor.name,
+        role: 'doctor',
+        token: data.token
+      };
+    } else if (role === 'admin' && data.admin) {
+      authUser = {
+        id: 'admin',
+        email: data.admin.email,
+        name: data.admin.name,
+        role: 'admin',
+        token: data.token
+      };
+    } else {
+      authUser = {
+        id: data.patient._id,
+        email: data.patient.email,
+        name: `${data.patient.firstName} ${data.patient.lastName}`,
+        role: 'patient',
+        token: data.token
+      };
+    }
 
     localStorage.setItem('medsync_token', data.token);
     localStorage.setItem('medsync_user', JSON.stringify(authUser));
@@ -66,8 +90,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(authUser);
   };
 
-  const register = async (formData: any) => {
-    const response = await fetch(`${PATIENT_SERVICE_URL}/register`, {
+  const register = async (formData: any, role = 'patient') => {
+    let url = `${PATIENT_SERVICE_URL}/register`;
+    if (role === 'doctor') url = `${process.env.NEXT_PUBLIC_DOCTOR_SERVICE_URL || 'http://localhost:3002/api/doctors'}/register`;
+
+    const response = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(formData)
@@ -79,13 +106,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const data = await response.json();
-    const authUser: AuthUser = {
-      patientId: data.patient._id,
-      email: data.patient.email,
-      firstName: data.patient.firstName,
-      lastName: data.patient.lastName,
-      token: data.token
-    };
+    let authUser: AuthUser;
+
+    if (role === 'doctor' && data.doctor) {
+      authUser = {
+        id: data.doctor._id,
+        email: data.doctor.contact.email,
+        name: data.doctor.name,
+        role: 'doctor',
+        token: data.token
+      };
+    } else {
+      authUser = {
+        id: data.patient._id,
+        email: data.patient.email,
+        name: `${data.patient.firstName} ${data.patient.lastName}`,
+        role: 'patient',
+        token: data.token
+      };
+    }
 
     localStorage.setItem('medsync_token', data.token);
     localStorage.setItem('medsync_user', JSON.stringify(authUser));

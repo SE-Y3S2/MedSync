@@ -3,8 +3,11 @@ kind: Deployment
 metadata:
   name: frontend
   namespace: medsync
+<<<<<<< HEAD
+=======
   labels:
     app: frontend
+>>>>>>> origin/main
 spec:
   replicas: 1
   selector:
@@ -17,6 +20,25 @@ spec:
     spec:
       containers:
       - name: frontend
+<<<<<<< HEAD
+        image: medsync-frontend:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 3000
+        env:
+        - name: NEXT_PUBLIC_PATIENT_SERVICE_URL
+          value: "http://medsync.local/api/patient"
+        - name: NEXT_PUBLIC_DOCTOR_SERVICE_URL
+          value: "http://medsync.local/api/doctor"
+        - name: NEXT_PUBLIC_APPOINTMENT_SERVICE_URL
+          value: "http://medsync.local/api/appointment"
+        - name: NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL
+          value: "http://medsync.local/api/telemedicine"
+        - name: NEXT_PUBLIC_PAYMENT_SERVICE_URL
+          value: "http://medsync.local/api/payment"
+        - name: NEXT_PUBLIC_SYMPTOM_CHECKER_URL
+          value: "http://medsync.local/api/ai"
+=======
         image: frontend:latest
         ports:
         - containerPort: 3000
@@ -44,3 +66,4 @@ spec:
     port: 3000
     targetPort: 3000
   type: LoadBalancer
+>>>>>>> origin/main

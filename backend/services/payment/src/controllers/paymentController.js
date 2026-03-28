@@ -1,6 +1,7 @@
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 const axios = require('axios');
 const Payment = require('../models/Payment');
+const { sendEvent } = require('../utils/kafka');
 
 const APPOINTMENT_SERVICE_URL =
     process.env.APPOINTMENT_SERVICE_URL || 'http://localhost:3003';
@@ -113,6 +114,20 @@ exports.handleWebhook = async (req, res, next) => {
                     paymentId: payment?._id?.toString() || session.payment_intent,
                 }
             );
+
+            // 3. Dispatch Kafka Event for Notification Service
+            // Need patientEmail for notification. Fetch it from appointment service or assume it's in metadata.
+            // Let's assume the appointment notification handles the detail, or we send what we have.
+            await sendEvent('payment-events', {
+                type: 'PAYMENT_SUCCESSFUL',
+                data: {
+                    appointmentId,
+                    patientId,
+                    amount: payment.amount,
+                    currency: payment.currency,
+                    patientEmail: session.customer_details ? session.customer_details.email : null
+                }
+            });
 
             console.log(`[Webhook] Payment confirmed for appointment ${appointmentId}`);
         } catch (err) {
