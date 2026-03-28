@@ -1,16 +1,19 @@
 {
-  "name": "telemedicine-service",
+  "name": "telemedicine",
   "version": "1.0.0",
-  "description": "Telemedicine Service for MedSync",
+  "description": "Telemedicine Service - MedSync Healthcare Platform",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
-    "agora-access-token": "^2.0.4",
     "express": "^4.18.2",
-    "kafkajs": "^2.2.4",
-    "mongoose": "^7.5.0",
-    "redis": "^5.11.0"
+    "cors": "^2.8.5",
+    "socket.io": "^4.6.1",
+    "dotenv": "^16.0.3"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.22"
   }
 }

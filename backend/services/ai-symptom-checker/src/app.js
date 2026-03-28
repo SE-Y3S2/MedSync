@@ -15,4 +15,7 @@ app.get('/', (req, res) => {
   res.json({ service: 'AI Symptom Checker Service', status: 'running' });
 });
 
+// TODO: Add your routes here
+// app.use('/api/ai', aiRoutes);
+
 module.exports = app;

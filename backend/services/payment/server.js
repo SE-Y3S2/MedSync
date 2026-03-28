@@ -3,6 +3,6 @@ const app = require('./src/app');
 
 const PORT = process.env.PORT || 3005;
 
-app.listen(PORT, () => {
-  console.log(`Payment Service running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Payment Service listening on port ${port}`);
 });

@@ -1,18 +1,18 @@
 const express = require('express');
-const { connectRedis } = require('./config/redis');
-const sessionRoutes = require('./routes/sessionRoutes');
+const cors = require('cors');
 
 const app = express();
 
-// Connect to Redis
-connectRedis();
-
+// Middleware
+app.use(cors());
 app.use(express.json());
 
-app.use('/api/sessions', sessionRoutes);
-
+// Health check
 app.get('/', (req, res) => {
-  res.send('Telemedicine Service is running');
+  res.json({ service: 'Telemedicine Service', status: 'running' });
 });
+
+// TODO: Add your routes here
+// app.use('/api/telemedicine', telemedicineRoutes);
 
 module.exports = app;

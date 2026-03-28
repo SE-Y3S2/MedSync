@@ -10,6 +10,20 @@ spec:
   - host: medsync.local
     http:
       paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 3000
+      - path: /auth
+        pathType: Prefix
+        backend:
+          service:
+            name: auth
+            port:
+              number: 5000
       - path: /api/patient
         pathType: Prefix
         backend:

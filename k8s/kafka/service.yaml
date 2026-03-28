@@ -3,12 +3,10 @@ kind: Service
 metadata:
   name: kafka
   namespace: medsync
-  labels:
-    app: kafka
 spec:
   selector:
     app: kafka
   ports:
   - port: 9092
     targetPort: 9092
-    name: kafka
+  type: ClusterIP

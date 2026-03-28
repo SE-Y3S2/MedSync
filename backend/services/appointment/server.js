@@ -1,8 +1,7 @@
-require('dotenv').config();
 const app = require('./src/app');
 
-const PORT = process.env.PORT || 3003;
+const port = process.env.PORT || 3003;
 
-app.listen(PORT, () => {
-  console.log(`Appointment Service running on port ${PORT}`);
+app.listen(port, () => {
+  console.log(`Appointment Service listening on port ${port}`);
 });

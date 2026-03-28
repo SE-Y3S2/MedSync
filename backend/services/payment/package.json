@@ -1,5 +1,5 @@
 {
-  "name": "payment-service",
+  "name": "payment",
   "version": "1.0.0",
   "description": "Payment Service for MedSync Healthcare Platform",
   "main": "server.js",
