@@ -117,3 +117,57 @@ export const symptomApi = {
     return response.json();
   }
 };
+
+// ── My Extensions (Additions Only) ──
+const DOCTOR_SERVICE_URL = process.env.NEXT_PUBLIC_DOCTOR_SERVICE_URL || 'http://localhost:3002/api/doctors';
+const APPOINTMENT_SERVICE_URL = process.env.NEXT_PUBLIC_APPOINTMENT_SERVICE_URL || 'http://localhost:3003/api/appointments';
+const PAYMENT_SERVICE_URL = process.env.NEXT_PUBLIC_PAYMENT_SERVICE_URL || 'http://localhost:3005/api/payments';
+
+export const doctorApi = {
+  listDoctors: async (specialty?: string) => {
+    const baseUrl = `${APPOINTMENT_SERVICE_URL}/search-doctors`;
+    const url = specialty ? `${baseUrl}?specialty=${encodeURIComponent(specialty)}` : baseUrl;
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch doctors');
+    return response.json();
+  },
+  getDoctor: async (id: string) => {
+    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/search-doctors/${id}`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch doctor details');
+    return response.json();
+  }
+};
+
+export const appointmentApi = {
+  createAppointment: async (data: any) => {
+    const response = await fetch(APPOINTMENT_SERVICE_URL, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Failed to book appointment');
+    return response.json();
+  },
+  getPatientAppointments: async (patientId: string) => {
+    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/patient/${patientId}`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch appointments');
+    return response.json();
+  },
+  cancelAppointment: async (id: string) => {
+    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to cancel appointment');
+    return response.json();
+  }
+};
+
+export const paymentApi = {
+  createCheckoutSession: async (data: { appointmentId: string; patientId: string; doctorId: string; doctorName: string; amount: number }) => {
+    const response = await fetch(`${PAYMENT_SERVICE_URL}/checkout`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Failed to create payment session');
+    return response.json();
+  }
+};

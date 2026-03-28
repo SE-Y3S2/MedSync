@@ -127,6 +127,7 @@ pids
 
 # dotenv environment variable files
 .env.test
+.env
 
 # parcel-bundler cache (https://parceljs.org/)
 .parcel-cache

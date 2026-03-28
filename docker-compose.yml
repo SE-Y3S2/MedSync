@@ -35,6 +35,13 @@ services:
     volumes:
       - appointment-db-data:/data/db
 
+  payment-db:
+    image: mongo:6.0
+    ports:
+      - "27021:27017"
+    volumes:
+      - payment-db-data:/data/db
+
   telemedicine-redis:
     image: redis:7.0-alpine
     ports:
@@ -88,6 +95,7 @@ services:
       - KAFKA_BROKERS=kafka:9092
       - MONGO_URI=mongodb://appointment-db:27017/appointment_db
       - DOCTOR_SERVICE_URL=http://doctor-management:3002
+      - JWT_SECRET=medsync-secret-key-2026
       - PORT=3003
 
   telemedicine:
@@ -108,8 +116,13 @@ services:
       - "3005:3005"
     depends_on:
       - kafka
+      - payment-db
     environment:
       - KAFKA_BROKERS=kafka:9092
+      - MONGO_URI=mongodb://payment-db:27017/payment_db
+      - APPOINTMENT_SERVICE_URL=http://appointment:3003
+      - FRONTEND_URL=http://localhost:3000
+      - JWT_SECRET=medsync-secret-key-2026
 
   notification:
     build: ./backend/services/notification
@@ -131,19 +144,20 @@ services:
       - KAFKA_BROKERS=kafka:9092
       - MONGO_URI=mongodb://ai-db:27017/ai_db
 
-  frontend:
-    build: ./frontend
-    ports:
-      - "3000:3000"
-    environment:
-      - NEXT_PUBLIC_PATIENT_SERVICE_URL=http://localhost:3001/api/patients
-      - NEXT_PUBLIC_SYMPTOM_CHECKER_URL=http://localhost:3007/api/symptom-checker
-    depends_on:
-      - patient-management
-      - ai-symptom-checker
+  # frontend:
+  #   build: ./frontend
+  #   ports:
+  #     - "3000:3000"
+  #   environment:
+  #     - NEXT_PUBLIC_PATIENT_SERVICE_URL=http://localhost:3001/api/patients
+  #     - NEXT_PUBLIC_SYMPTOM_CHECKER_URL=http://localhost:3007/api/symptom-checker
+  #   depends_on:
+  #     - patient-management
+  #     - ai-symptom-checker
 
 volumes:
   doctor-db-data:
   appointment-db-data:
   patient-db-data:
   ai-db-data:
+  payment-db-data:

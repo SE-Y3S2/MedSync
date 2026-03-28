@@ -184,3 +184,59 @@ export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
     </div>
   );
 };
+
+// ── My Extensions (Strictly Additive) ──
+
+interface MedCardProps extends CardProps {
+  style?: React.CSSProperties;
+}
+export const MedCard = ({ title, children, icon, className, style }: MedCardProps) => (
+  <div className={`med-card ${className || ''}`} style={style}>
+    <h3 className="card-title">
+      {icon && <span className="card-icon">{icon}</span>}
+      {title}
+    </h3>
+    <div className="card-content">
+      {children}
+    </div>
+  </div>
+);
+
+interface MedButtonProps extends ButtonProps {
+  className?: string;
+  style?: React.CSSProperties;
+}
+export const MedButton = ({ children, onClick, type = 'button', variant = 'primary', size, disabled = false, icon, className, style }: MedButtonProps) => (
+  <button
+    type={type}
+    onClick={onClick}
+    disabled={disabled}
+    className={`med-button ${variant} ${size || ''} ${className || ''}`}
+    style={style}
+  >
+    {icon && <span>{icon}</span>}
+    {children}
+  </button>
+);
+
+interface MedInputProps extends InputProps {
+  className?: string;
+  style?: React.CSSProperties;
+  name?: string;
+  onChange: (e: any) => void;
+}
+export const MedInput = ({ label, type = 'text', value, onChange, placeholder, required = false, disabled = false, className, style, name }: MedInputProps) => (
+  <div className={`med-input-group ${className || ''}`} style={style}>
+    {label && <label className="med-label">{label}</label>}
+    <input
+      type={type}
+      name={name}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      required={required}
+      disabled={disabled}
+      className="med-input"
+    />
+  </div>
+);
