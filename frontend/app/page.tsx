@@ -12,7 +12,7 @@ export default function Home() {
       {/* Hero */}
       <div className="hero">
         <h1>
-          {user ? `Welcome back, ${user.firstName}` : 'Welcome to MedSync'}
+          {user ? `Welcome back, ${user.name}` : 'Welcome to MedSync'}
         </h1>
         <p>
           Your integrated platform for personal medical management and AI-powered health diagnostics.

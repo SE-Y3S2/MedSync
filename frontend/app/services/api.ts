@@ -1,5 +1,6 @@
 const PATIENT_SERVICE_URL = process.env.NEXT_PUBLIC_PATIENT_SERVICE_URL || 'http://localhost:3001/api/patients';
 const SYMPTOM_CHECKER_URL = process.env.NEXT_PUBLIC_SYMPTOM_CHECKER_URL || 'http://localhost:3007/api/symptom-checker';
+const TELEMEDICINE_SERVICE_URL = process.env.NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL || 'http://localhost:3006/api/telemedicine';
 
 // ── Auth Helper ──
 const getAuthHeaders = (): HeadersInit => {
@@ -69,6 +70,15 @@ export const patientApi = {
     if (!response.ok) throw new Error('Failed to add prescription');
     return response.json();
   },
+  doctorIssuePrescription: async (patientId: string, data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/${patientId}/prescriptions`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Failed to issue prescription');
+    return response.json();
+  },
 
   // Documents
   uploadDocument: async (formData: FormData) => {
@@ -135,6 +145,67 @@ export const doctorApi = {
     const response = await fetch(`${APPOINTMENT_SERVICE_URL}/search-doctors/${id}`, { headers: getAuthHeaders() });
     if (!response.ok) throw new Error('Failed to fetch doctor details');
     return response.json();
+  },
+  updateDoctor: async (id: string, data: any) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/${id}`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Failed to update doctor');
+    return response.json();
+  },
+  login: async (data: any) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Invalid doctor credentials');
+    return response.json();
+  },
+  register: async (data: any) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Failed to register doctor');
+    return response.json();
+  },
+  getAvailability: async (id: string) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/${id}/availability`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch availability');
+    return response.json();
+  },
+  addAvailability: async (id: string, data: any) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/${id}/availability`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Failed to add slot');
+    return response.json();
+  },
+  deleteAvailability: async (id: string, slotId: string) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/${id}/availability/${slotId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to delete slot');
+    return response.json();
+  }
+};
+
+export const adminApi = {
+  login: async (data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Invalid admin credentials');
+    return response.json();
   }
 };
 
@@ -153,9 +224,54 @@ export const appointmentApi = {
     if (!response.ok) throw new Error('Failed to fetch appointments');
     return response.json();
   },
-  cancelAppointment: async (id: string) => {
-    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/${id}`, { method: 'DELETE', headers: getAuthHeaders() });
+  getDoctorAppointments: async (doctorId: string) => {
+    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/doctor/${doctorId}`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch doctor appointments');
+    return response.json();
+  },
+  updateStatus: async (id: string, data: { status: string; cancelledBy?: string; cancellationReason?: string; notes?: string }) => {
+    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/${id}/status`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Failed to update status');
+    return response.json();
+  },
+  cancelAppointment: async (id: string, data?: { cancelledBy: string; cancellationReason?: string }) => {
+    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/${id}/cancel`, { 
+      method: 'PUT', 
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data || {}) 
+    });
     if (!response.ok) throw new Error('Failed to cancel appointment');
+    return response.json();
+  }
+};
+
+export const telemedicineApi = {
+  createSession: async (data: { appointmentId: string; doctorId: string; patientId: string }) => {
+    const response = await fetch(TELEMEDICINE_SERVICE_URL, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Failed to create session');
+    return response.json();
+  },
+  getSession: async (appointmentId: string) => {
+    const response = await fetch(`${TELEMEDICINE_SERVICE_URL}/${appointmentId}`, {
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to fetch session');
+    return response.json();
+  },
+  endSession: async (appointmentId: string) => {
+    const response = await fetch(`${TELEMEDICINE_SERVICE_URL}/${appointmentId}/end`, {
+      method: 'PUT',
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to end session');
     return response.json();
   }
 };

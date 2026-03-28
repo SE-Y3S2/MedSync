@@ -1,0 +1,11 @@
+--- MedSync: Distributed Systems Assignment 1 Submission ---
+
+GitHub Repository: [INSERT_GITHUB_LINK_HERE]
+
+Project Presentation & Demo (YouTube): [INSERT_YOUTUBE_LINK_HERE]
+
+Deployment Instructions:
+1. Ensure Docker Desktop is installed and running.
+2. Run start-medsync.bat (Windows) or ./start-medsync.sh (Mac/Linux).
+3. Open http://localhost:3000 in your browser.
+4. Use admin@medsync.com / admin123 for initial administrative access.

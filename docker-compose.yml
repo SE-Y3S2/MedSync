@@ -144,16 +144,24 @@ services:
       - KAFKA_BROKERS=kafka:9092
       - MONGO_URI=mongodb://ai-db:27017/ai_db
 
-  # frontend:
-  #   build: ./frontend
-  #   ports:
-  #     - "3000:3000"
-  #   environment:
-  #     - NEXT_PUBLIC_PATIENT_SERVICE_URL=http://localhost:3001/api/patients
-  #     - NEXT_PUBLIC_SYMPTOM_CHECKER_URL=http://localhost:3007/api/symptom-checker
-  #   depends_on:
-  #     - patient-management
-  #     - ai-symptom-checker
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - NEXT_PUBLIC_PATIENT_SERVICE_URL=http://localhost:3001/api/patients
+      - NEXT_PUBLIC_SYMPTOM_CHECKER_URL=http://localhost:3007/api/symptom-checker
+      - NEXT_PUBLIC_DOCTOR_SERVICE_URL=http://localhost:3002/api/doctors
+      - NEXT_PUBLIC_APPOINTMENT_SERVICE_URL=http://localhost:3003/api/appointments
+      - NEXT_PUBLIC_PAYMENT_SERVICE_URL=http://localhost:3005/api/payments
+      - NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL=http://localhost:3004/api/sessions
+    depends_on:
+      - patient-management
+      - doctor-management
+      - appointment
+      - payment
+      - telemedicine
+      - ai-symptom-checker
 
 volumes:
   doctor-db-data:

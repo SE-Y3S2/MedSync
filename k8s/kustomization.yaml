@@ -16,9 +16,13 @@ resources:
   - payment/deployment.yaml
   - notification/deployment.yaml
   - ai-symptom-checker/deployment.yaml
+  - frontend/deployment.yaml
+  - frontend/service.yaml
   - ingress.yaml
 
 images:
+  - name: frontend
+    newTag: latest
   - name: patient-management
     newTag: latest
   - name: doctor-management

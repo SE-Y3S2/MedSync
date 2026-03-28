@@ -1,5 +1,6 @@
 const Appointment = require('../models/Appointment');
 const axios = require('axios');
+const { sendEvent } = require('../utils/kafka');
 
 const DOCTOR_SERVICE_URL =
     process.env.DOCTOR_SERVICE_URL || 'http://localhost:3002';
@@ -63,6 +64,24 @@ exports.createAppointment = async (req, res, next) => {
             slotDate, slotTime, reason, consultationFee,
         });
         await appointment.save();
+
+        // Dispatch Kafka Event
+        await sendEvent('appointment-events', {
+            type: 'APPOINTMENT_CREATED',
+            data: {
+                appointmentId: appointment._id,
+                patientId,
+                patientName,
+                patientEmail,
+                doctorId,
+                doctorName,
+                specialty,
+                date: slotDate,
+                time: slotTime,
+                fee: consultationFee
+            }
+        });
+
         res.status(201).json(appointment);
     } catch (error) {
         next(error);

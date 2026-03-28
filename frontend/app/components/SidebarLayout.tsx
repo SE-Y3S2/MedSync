@@ -6,19 +6,36 @@ import { usePathname } from 'next/navigation';
 import { ToastContainer } from './UI';
 import { useAuth } from '../context/AuthContext';
 
-const navItems = [
-  { href: '/', label: 'Dashboard', icon: '🏠' },
-  { href: '/appointment/search', label: 'Find Doctors', icon: '🔍' },
-  { href: '/appointment', label: 'My Appointments', icon: '📅' },
-  { href: '/patient/profile', label: 'My Profile', icon: '👤' },
-  { href: '/patient/records', label: 'Records & Documents', icon: '📋' },
-  { href: '/symptom-checker', label: 'AI Symptom Checker', icon: '🤖' },
-];
+const getNavItems = (role?: string) => {
+  if (role === 'admin') {
+    return [
+      { href: '/admin', label: 'Admin Dashboard', icon: '🛡️' },
+      { href: '/admin/doctors', label: 'Manage Doctors', icon: '👨‍⚕️' }
+    ];
+  }
+  if (role === 'doctor') {
+    return [
+      { href: '/doctor', label: 'Doctor Dashboard', icon: '🩺' },
+      { href: '/doctor/availability', label: 'My Schedule', icon: '🕒' },
+      { href: '/doctor/appointments', label: 'Appointments', icon: '📅' }
+    ];
+  }
+  return [
+    { href: '/', label: 'Dashboard', icon: '🏠' },
+    { href: '/appointment/search', label: 'Find Doctors', icon: '🔍' },
+    { href: '/appointment', label: 'My Appointments', icon: '📅' },
+    { href: '/patient/profile', label: 'My Profile', icon: '👤' },
+    { href: '/patient/records', label: 'Records & Documents', icon: '📋' },
+    { href: '/symptom-checker', label: 'AI Symptom Checker', icon: '🤖' },
+  ];
+};
 
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  
+  const navItems = getNavItems(user?.role);
 
   return (
     <>
@@ -55,7 +72,7 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
             {user ? (
               <div>
                 <p style={{ color: '#fff', fontWeight: 600, fontSize: '0.85rem', marginBottom: '4px' }}>
-                  {user.firstName} {user.lastName}
+                  {user.name} ({user.role})
                 </p>
                 <p style={{ marginBottom: '8px' }}>{user.email}</p>
                 <button
