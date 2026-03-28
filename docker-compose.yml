@@ -29,8 +29,8 @@ services:
     volumes:
       - mongo-data:/data/db
     environment:
-      MONGO_INITDB_ROOT_USERNAME: admin
-      MONGO_INITDB_ROOT_PASSWORD: password
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-password}
 
   redis:
     image: redis:7.0-alpine
@@ -41,114 +41,127 @@ services:
   auth:
     build: ./backend/services/auth
     ports:
-      - "5000:5000"
+      - "${AUTH_PORT:-5000}:5000"
     depends_on:
       - mongo
     environment:
-      - MONGO_URI=mongodb://admin:password@mongo:27017/medsync?authSource=admin
-      - JWT_SECRET=medsync_super_secret_jwt_key_2026
-      - JWT_EXPIRE=7d
+      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongo:27017/medsync?authSource=admin
+      - JWT_SECRET=${JWT_SECRET}
+      - JWT_EXPIRE=${JWT_EXPIRE:-7d}
       - PORT=5000
 
   notification:
     build: ./backend/services/notification
     ports:
-      - "3006:3006"
+      - "${NOTIFICATION_PORT:-3006}:3006"
     depends_on:
       - kafka
     environment:
-      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
       - EMAIL_USER=${EMAIL_USER}
       - EMAIL_PASS=${EMAIL_PASS}
       - TWILIO_SID=${TWILIO_SID}
       - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN}
       - TWILIO_FROM=${TWILIO_FROM}
+      - SMTP_HOST=${SMTP_HOST:-smtp.gmail.com}
+      - SMTP_PORT=${SMTP_PORT:-587}
       - PORT=3006
 
   patient-management:
     build: ./backend/services/patient-management
     ports:
-      - "3001:3001"
+      - "${PATIENT_PORT:-3001}:3001"
     depends_on:
       - kafka
       - mongo
     environment:
-      - KAFKA_BROKERS=kafka:9092
-      - MONGO_URI=mongodb://admin:password@mongo:27017/patient_db?authSource=admin
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongo:27017/patient_db?authSource=admin
       - PORT=3001
+      - JWT_SECRET=${JWT_SECRET}
 
   doctor-management:
     build: ./backend/services/doctor-management
     ports:
-      - "3002:3002"
+      - "${DOCTOR_PORT:-3002}:3002"
     depends_on:
       - kafka
       - mongo
     environment:
-      - KAFKA_BROKERS=kafka:9092
-      - MONGO_URI=mongodb://admin:password@mongo:27017/doctor_db?authSource=admin
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongo:27017/doctor_db?authSource=admin
       - PORT=3002
+      - JWT_SECRET=${JWT_SECRET}
 
   appointment:
     build: ./backend/services/appointment
     ports:
-      - "3003:3003"
+      - "${APPOINTMENT_PORT:-3003}:3003"
     depends_on:
       - kafka
       - mongo
     environment:
-      - KAFKA_BROKERS=kafka:9092
-      - MONGO_URI=mongodb://admin:password@mongo:27017/appointment_db?authSource=admin
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongo:27017/appointment_db?authSource=admin
       - DOCTOR_SERVICE_URL=http://doctor-management:3002
       - PORT=3003
+      - JWT_SECRET=${JWT_SECRET}
 
   telemedicine:
     build: ./backend/services/telemedicine
     ports:
-      - "3004:3004"
+      - "${TELEMEDICINE_PORT:-3004}:3004"
     depends_on:
       - kafka
       - redis
     environment:
-      - KAFKA_BROKERS=kafka:9092
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - REDIS_HOST=${REDIS_HOST:-redis}
+      - REDIS_PORT=${REDIS_PORT:-6379}
+      - AGORA_APP_ID=${AGORA_APP_ID}
+      - AGORA_APP_CERTIFICATE=${AGORA_APP_CERTIFICATE}
       - PORT=3004
+      - JWT_SECRET=${JWT_SECRET}
 
   payment:
     build: ./backend/services/payment
     ports:
-      - "3005:3005"
+      - "${PAYMENT_PORT:-3005}:3005"
     depends_on:
       - kafka
       - mongo
     environment:
-      - KAFKA_BROKERS=kafka:9092
-      - MONGO_URI=mongodb://admin:password@mongo:27017/payment_db?authSource=admin
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongo:27017/payment_db?authSource=admin
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - PORT=3005
+      - JWT_SECRET=${JWT_SECRET}
 
   ai-symptom-checker:
     build: ./backend/services/ai-symptom-checker
     ports:
-      - "3007:3007"
+      - "${AI_PORT:-3007}:3007"
     depends_on:
       - kafka
-      - ai-db
     environment:
-      - KAFKA_BROKERS=kafka:9092
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PORT=3007
+      - JWT_SECRET=${JWT_SECRET}
 
   frontend:
     build: ./frontend
     ports:
-      - "3000:3000"
+      - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      - NEXT_PUBLIC_PATIENT_SERVICE_URL=http://localhost:3001/api/patients
-      - NEXT_PUBLIC_SYMPTOM_CHECKER_URL=http://localhost:3007/api/symptom-checker
-      - NEXT_PUBLIC_DOCTOR_SERVICE_URL=http://localhost:3002/api/doctors
-      - NEXT_PUBLIC_APPOINTMENT_SERVICE_URL=http://localhost:3003/api/appointments
-      - NEXT_PUBLIC_PAYMENT_SERVICE_URL=http://localhost:3005/api/payments
-      - NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL=http://localhost:3004/api/sessions
+      - NEXT_PUBLIC_PATIENT_SERVICE_URL=http://localhost:${PATIENT_PORT:-3001}/api/patients
+      - NEXT_PUBLIC_SYMPTOM_CHECKER_URL=http://localhost:${AI_PORT:-3007}/api/symptom-checker
+      - NEXT_PUBLIC_DOCTOR_SERVICE_URL=http://localhost:${DOCTOR_PORT:-3002}/api/doctors
+      - NEXT_PUBLIC_APPOINTMENT_SERVICE_URL=http://localhost:${APPOINTMENT_PORT:-3003}/api/appointments
+      - NEXT_PUBLIC_PAYMENT_SERVICE_URL=http://localhost:${PAYMENT_PORT:-3005}/api/payments
+      - NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL=http://localhost:${TELEMEDICINE_PORT:-3004}/api/sessions
     depends_on:
       - patient-management
       - doctor-management
