@@ -42,4 +42,7 @@ app.use((err, req, res, next) => {
   });
 });
 
+// TODO: Add your routes here
+// app.use('/api/payments', paymentRoutes);
+
 module.exports = app;

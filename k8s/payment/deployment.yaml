@@ -21,30 +21,30 @@ spec:
         ports:
         - containerPort: 3005
         env:
-        - name: PORT
-          value: "3005"
         - name: KAFKA_BROKERS
           value: "kafka:9092"
+        - name: MONGO_URI
+          value: "mongodb://mongo:27017/payment_db"
+        - name: PORT
+          value: "3005"
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "100m"
-          limits:
             memory: "256Mi"
-            cpu: "200m"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: payment
   namespace: medsync
-  labels:
-    app: payment
 spec:
   selector:
     app: payment
   ports:
-  - port: 3005
+  - protocol: TCP
+    port: 3005
     targetPort: 3005
-    name: http
   type: ClusterIP

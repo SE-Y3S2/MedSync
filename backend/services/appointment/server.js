@@ -1,9 +1,9 @@
-require('dotenv').config();
 const app = require('./src/app');
 const { connectProducer } = require('./src/utils/kafka');
 
-const PORT = process.env.PORT || 3003;
+const port = process.env.PORT || 3003;
 
+<<<<<<< HEAD
 const startServer = async () => {
   await connectProducer();
   
@@ -13,3 +13,8 @@ const startServer = async () => {
 };
 
 startServer();
+=======
+app.listen(port, () => {
+  console.log(`Appointment Service listening on port ${port}`);
+});
+>>>>>>> origin/main
