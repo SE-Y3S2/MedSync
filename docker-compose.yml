@@ -1,4 +1,3 @@
-
 services:
   # Kafka & Zookeeper for message streaming
   zookeeper:
@@ -21,21 +20,13 @@ services:
     ports:
       - "9092:9092"
 
-  # Databases (optional local Mongo; Atlas users can comment this out and rely on MONGO_URI in `.env`)
-  mongo:
-    image: mongo:6.0
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-password}
-
+  # Databases
   redis:
     image: redis:7.0-alpine
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
 
   # Backend Services
 
@@ -158,7 +149,6 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
-      - NEXT_PUBLIC_AUTH_SERVICE_URL=http://localhost:${AUTH_PORT:-5000}/auth
       - NEXT_PUBLIC_PATIENT_SERVICE_URL=http://localhost:${PATIENT_PORT:-3001}/api/patients
       - NEXT_PUBLIC_SYMPTOM_CHECKER_URL=http://localhost:${AI_PORT:-3007}/api/symptom-checker
       - NEXT_PUBLIC_DOCTOR_SERVICE_URL=http://localhost:${DOCTOR_PORT:-3002}/api/doctors
@@ -174,4 +164,6 @@ services:
       - ai-symptom-checker
 
 volumes:
-  mongo-data:
+  redis-data:
+
+
