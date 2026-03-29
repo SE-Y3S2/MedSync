@@ -18,6 +18,10 @@ exports.createCheckoutSession = async (req, res, next) => {
             return res.status(400).json({ message: 'appointmentId, patientId, and amount are required' });
         }
 
+        if (req.user && req.user.role !== 'admin' && req.user.id !== patientId) {
+            return res.status(403).json({ message: 'Forbidden: You can only process payments for your own appointments.' });
+        }
+
         // Prevent duplicate sessions for the same appointment
         const existing = await Payment.findOne({
             appointmentId,
@@ -145,6 +149,11 @@ exports.getPaymentByAppointment = async (req, res, next) => {
     try {
         const payment = await Payment.findOne({ appointmentId: req.params.appointmentId });
         if (!payment) return res.status(404).json({ message: 'No payment found for this appointment' });
+
+        if (req.user && req.user.role !== 'admin' && req.user.id !== payment.patientId && req.user.id !== payment.doctorId) {
+            return res.status(403).json({ message: 'Forbidden: You cannot view this payment record.' });
+        }
+
         res.json(payment);
     } catch (error) {
         next(error);
@@ -154,6 +163,10 @@ exports.getPaymentByAppointment = async (req, res, next) => {
 // ── GET /api/payments/patient/:id ────────────────────────────────────────────
 exports.getPatientPaymentHistory = async (req, res, next) => {
     try {
+        if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.id) {
+            return res.status(403).json({ message: 'Forbidden: You cannot view another patient\'s payment history.' });
+        }
+
         const payments = await Payment.find({ patientId: req.params.id }).sort({ createdAt: -1 });
         res.json(payments);
     } catch (error) {
