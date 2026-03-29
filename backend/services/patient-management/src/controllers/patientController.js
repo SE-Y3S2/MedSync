@@ -29,7 +29,7 @@ exports.register = async (req, res) => {
     await patient.save();
 
     const token = jwt.sign(
-      { patientId: patient._id, email: patient.email },
+      { id: patient._id, patientId: patient._id, email: patient.email, role: 'patient' },
       JWT_SECRET,
       { expiresIn: '7d' }
     );
@@ -68,7 +68,7 @@ exports.login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { patientId: patient._id, email: patient.email },
+      { id: patient._id, patientId: patient._id, email: patient.email, role: 'patient' },
       JWT_SECRET,
       { expiresIn: '7d' }
     );

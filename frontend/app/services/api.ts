@@ -1,10 +1,18 @@
 const PATIENT_SERVICE_URL = process.env.NEXT_PUBLIC_PATIENT_SERVICE_URL || 'http://localhost:3001/api/patients';
 const SYMPTOM_CHECKER_URL = process.env.NEXT_PUBLIC_SYMPTOM_CHECKER_URL || 'http://localhost:3007/api/symptom-checker';
-const TELEMEDICINE_SERVICE_URL = process.env.NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL || 'http://localhost:3006/api/telemedicine';
+const TELEMEDICINE_SERVICE_URL = process.env.NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL || 'http://localhost:3004/api/sessions';
+
+const getCookie = (name: string) => {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.match(new RegExp(`(^| )${name}=([^;]+)`));
+  return match ? decodeURIComponent(match[2]) : null;
+};
 
 // ── Auth Helper ──
 const getAuthHeaders = (): HeadersInit => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('medsync_token') : null;
+  const token = typeof window !== 'undefined'
+    ? (getCookie('medsync_token') || localStorage.getItem('medsync_token'))
+    : null;
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
@@ -13,7 +21,9 @@ const getAuthHeaders = (): HeadersInit => {
 };
 
 const getAuthHeadersNoContentType = (): HeadersInit => {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('medsync_token') : null;
+  const token = typeof window !== 'undefined'
+    ? (getCookie('medsync_token') || localStorage.getItem('medsync_token'))
+    : null;
   const headers: HeadersInit = {};
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
@@ -23,6 +33,26 @@ const getAuthHeadersNoContentType = (): HeadersInit => {
 
 // ── Patient API ──
 export const patientApi = {
+  // Auth
+  login: async (data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Invalid patient credentials');
+    return response.json();
+  },
+  register: async (data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Failed to register patient');
+    return response.json();
+  },
+
   // Profile
   getProfile: async () => {
     const response = await fetch(`${PATIENT_SERVICE_URL}/profile`, {
@@ -217,6 +247,11 @@ export const appointmentApi = {
       body: JSON.stringify(data)
     });
     if (!response.ok) throw new Error('Failed to book appointment');
+    return response.json();
+  },
+  getAppointment: async (id: string) => {
+    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/${id}`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch appointment');
     return response.json();
   },
   getPatientAppointments: async (patientId: string) => {

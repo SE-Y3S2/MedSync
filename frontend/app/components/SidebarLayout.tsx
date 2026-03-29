@@ -1,41 +1,106 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { ToastContainer } from './UI';
 import { useAuth } from '../context/AuthContext';
+
+import { Shield, UserCog, Stethoscope, Clock, Calendar, Home, Search, CalendarClock, User, FileText, Bot } from 'lucide-react';
 
 const getNavItems = (role?: string) => {
   if (role === 'admin') {
     return [
-      { href: '/admin', label: 'Admin Dashboard', icon: '🛡️' },
-      { href: '/admin/doctors', label: 'Manage Doctors', icon: '👨‍⚕️' }
+      { href: '/admin', label: 'Admin Dashboard', icon: <Shield size={20} /> },
+      { href: '/admin/doctors', label: 'Manage Doctors', icon: <UserCog size={20} /> }
     ];
   }
   if (role === 'doctor') {
     return [
-      { href: '/doctor', label: 'Doctor Dashboard', icon: '🩺' },
-      { href: '/doctor/availability', label: 'My Schedule', icon: '🕒' },
-      { href: '/doctor/appointments', label: 'Appointments', icon: '📅' }
+      { href: '/doctor', label: 'Doctor Dashboard', icon: <Stethoscope size={20} /> },
+      { href: '/doctor/availability', label: 'My Schedule', icon: <Clock size={20} /> },
+      { href: '/doctor/appointments', label: 'Appointments', icon: <Calendar size={20} /> }
     ];
   }
   return [
-    { href: '/', label: 'Dashboard', icon: '🏠' },
-    { href: '/appointment/search', label: 'Find Doctors', icon: '🔍' },
-    { href: '/appointment', label: 'My Appointments', icon: '📅' },
-    { href: '/patient/profile', label: 'My Profile', icon: '👤' },
-    { href: '/patient/records', label: 'Records & Documents', icon: '📋' },
-    { href: '/symptom-checker', label: 'AI Symptom Checker', icon: '🤖' },
+    { href: '/patient', label: 'Dashboard', icon: <Home size={20} /> },
+    { href: '/appointment/search', label: 'Find Doctors', icon: <Search size={20} /> },
+    { href: '/appointment', label: 'My Appointments', icon: <CalendarClock size={20} /> },
+    { href: '/patient/profile', label: 'My Profile', icon: <User size={20} /> },
+    { href: '/patient/records', label: 'Records & Documents', icon: <FileText size={20} /> },
+    { href: '/symptom-checker', label: 'AI Symptom Checker', icon: <Bot size={20} /> },
   ];
 };
 
 export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const router = useRouter();
+  const { user, logout, isLoading } = useAuth();
   
+  // Routes where sidebar should NOT be displayed
+  const noSidebarRoutes = ['/', '/login', '/register'];
+  const showSidebar = !noSidebarRoutes.includes(pathname);
+
+  useEffect(() => {
+    if (isLoading) return;
+
+    if (showSidebar && !user) {
+      router.replace('/login');
+      return;
+    }
+
+    if (!user) return;
+
+    const allowedPrefixesByRole: Record<string, string[]> = {
+      admin: ['/admin'],
+      doctor: ['/doctor', '/telemedicine'],
+      patient: ['/patient', '/appointment', '/symptom-checker', '/telemedicine', '/payment'],
+    };
+
+    const allowedPrefixes = allowedPrefixesByRole[user.role] || [];
+    const isAllowed = allowedPrefixes.some((prefix) => pathname.startsWith(prefix));
+
+    if (!isAllowed) {
+      router.replace(user.role === 'admin' ? '/admin' : user.role === 'doctor' ? '/doctor' : '/patient');
+      return;
+    }
+
+    if (pathname.startsWith('/admin') && user.role !== 'admin') {
+      router.replace(user.role === 'doctor' ? '/doctor' : '/patient');
+      return;
+    }
+
+    if (pathname.startsWith('/doctor') && user.role !== 'doctor') {
+      router.replace(user.role === 'admin' ? '/admin' : '/patient');
+      return;
+    }
+
+    if (pathname.startsWith('/patient') && user.role !== 'patient') {
+      router.replace(user.role === 'admin' ? '/admin' : '/doctor');
+      return;
+    }
+  }, [isLoading, pathname, router, showSidebar, user]);
+
   const navItems = getNavItems(user?.role);
+
+  if (!showSidebar) {
+    return (
+      <>
+        <ToastContainer />
+        <main>{children}</main>
+      </>
+    );
+  }
+
+  if (isLoading || !user) {
+    return (
+      <>
+        <ToastContainer />
+        <main className="main-content" />
+      </>
+    );
+  }
 
   return (
     <>

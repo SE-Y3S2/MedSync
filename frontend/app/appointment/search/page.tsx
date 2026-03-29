@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { MedCard as Card, MedInput as Input, MedButton as Button, showToast, Skeleton, Badge } from '../../components/UI';
 import { doctorApi } from '@/app/services/api';
+import { Search, UserCog, FolderOpen } from 'lucide-react';
 import Link from 'next/link';
 
 export default function AppointmentSearchPage() {
@@ -45,7 +46,7 @@ export default function AppointmentSearchPage() {
                             onChange={(e) => setSpecialty(e.target.value)}
                         />
                     </div>
-                    <Button type="submit" className="navy" icon="🔍" style={{ height: '44px' }}>Search</Button>
+                    <Button type="submit" className="navy" icon={<Search size={20} />} style={{ height: '44px' }}>Search</Button>
                 </form>
             </header>
 
@@ -54,7 +55,7 @@ export default function AppointmentSearchPage() {
                     [1, 2, 3].map(i => <Skeleton key={i} type="card" />)
                 ) : doctors.length > 0 ? (
                     doctors.map((doctor) => (
-                        <Card key={doctor._id} title={doctor.name} icon="👨‍⚕️" className="doctor-card">
+                        <Card key={doctor._id} title={doctor.name} icon={<UserCog size={20} />} className="doctor-card">
                             <div style={{ marginBottom: '16px' }}>
                                 <Badge text={doctor.specialty} variant="info" />
                             </div>
@@ -74,7 +75,7 @@ export default function AppointmentSearchPage() {
                     ))
                 ) : (
                     <div className="empty-state">
-                        <div className="empty-icon text-turquoise">📂</div>
+                        <div className="empty-icon text-turquoise"><FolderOpen size={48} /></div>
                         <h3 className="text-navy">No doctors found</h3>
                         <p>Try searching for a different specialty or browse all doctors.</p>
                         <Button variant="secondary" onClick={() => { setSpecialty(''); fetchDoctors(''); }} style={{ marginTop: '16px' }}>

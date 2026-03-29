@@ -1,27 +1,20 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-
-interface AuthUser {
-  id: string;
-  email: string;
-  name: string;
-  role: 'patient' | 'doctor' | 'admin';
-  token: string;
-}
+import Cookies from 'js-cookie';
+import { authService, User as AuthUser } from '../services/authService';
+import { patientApi, doctorApi, adminApi } from '../services/api';
 
 interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
-  login: (email: string, password: string, role?: 'patient'|'doctor'|'admin') => Promise<void>;
-  register: (data: any, role?: 'patient'|'doctor') => Promise<void>;
+  login: (email: string, password: string, role?: string) => Promise<AuthUser>;
+  register: (data: any) => Promise<AuthUser>;
   logout: () => void;
   isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const PATIENT_SERVICE_URL = process.env.NEXT_PUBLIC_PATIENT_SERVICE_URL || 'http://localhost:3001/api/patients';
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -30,7 +23,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Load stored auth on mount
   useEffect(() => {
-    const storedToken = localStorage.getItem('medsync_token');
+    const storedToken = Cookies.get('medsync_token');
     const storedUser = localStorage.getItem('medsync_user');
     if (storedToken && storedUser) {
       setToken(storedToken);
@@ -39,102 +32,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password: string, role = 'patient') => {
-    let url = `${PATIENT_SERVICE_URL}/login`;
-    if (role === 'admin') url = `${PATIENT_SERVICE_URL}/admin/login`;
-    if (role === 'doctor') url = `${process.env.NEXT_PUBLIC_DOCTOR_SERVICE_URL || 'http://localhost:3002/api/doctors'}/login`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.message || 'Login failed');
-    }
-
-    const data = await response.json();
-    let authUser: AuthUser;
-
-    if (role === 'doctor' && data.doctor) {
-      authUser = {
-        id: data.doctor._id,
-        email: data.doctor.contact.email,
-        name: data.doctor.name,
-        role: 'doctor',
-        token: data.token
-      };
-    } else if (role === 'admin' && data.admin) {
-      authUser = {
-        id: 'admin',
-        email: data.admin.email,
-        name: data.admin.name,
-        role: 'admin',
-        token: data.token
-      };
+  const login = async (email: string, password: string, role: string = 'patient') => {
+    let data;
+    if (role === 'doctor') {
+      data = await doctorApi.login({ email, password });
+    } else if (role === 'admin') {
+      data = await adminApi.login({ email, password });
     } else {
-      authUser = {
-        id: data.patient._id,
-        email: data.patient.email,
-        name: `${data.patient.firstName} ${data.patient.lastName}`,
-        role: 'patient',
-        token: data.token
-      };
+      data = await patientApi.login({ email, password });
     }
-
-    localStorage.setItem('medsync_token', data.token);
-    localStorage.setItem('medsync_user', JSON.stringify(authUser));
+    
+    authService.setToken(data.token);
+    localStorage.setItem('medsync_user', JSON.stringify(data.user));
+    
     setToken(data.token);
-    setUser(authUser);
+    setUser(data.user);
+    return data.user;
   };
 
-  const register = async (formData: any, role = 'patient') => {
-    let url = `${PATIENT_SERVICE_URL}/register`;
-    if (role === 'doctor') url = `${process.env.NEXT_PUBLIC_DOCTOR_SERVICE_URL || 'http://localhost:3002/api/doctors'}/register`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(formData)
-    });
-
-    if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.message || 'Registration failed');
-    }
-
-    const data = await response.json();
-    let authUser: AuthUser;
-
-    if (role === 'doctor' && data.doctor) {
-      authUser = {
-        id: data.doctor._id,
-        email: data.doctor.contact.email,
-        name: data.doctor.name,
-        role: 'doctor',
-        token: data.token
-      };
+  const register = async (formData: any) => {
+    let data;
+    if (formData.role === 'doctor') {
+      data = await doctorApi.register(formData);
     } else {
-      authUser = {
-        id: data.patient._id,
-        email: data.patient.email,
-        name: `${data.patient.firstName} ${data.patient.lastName}`,
-        role: 'patient',
-        token: data.token
-      };
+      data = await patientApi.register(formData);
     }
-
-    localStorage.setItem('medsync_token', data.token);
-    localStorage.setItem('medsync_user', JSON.stringify(authUser));
+    
+    authService.setToken(data.token);
+    localStorage.setItem('medsync_user', JSON.stringify(data.user));
+    
     setToken(data.token);
-    setUser(authUser);
+    setUser(data.user);
+    return data.user;
   };
 
   const logout = () => {
-    localStorage.removeItem('medsync_token');
-    localStorage.removeItem('medsync_user');
+    authService.logout();
     setToken(null);
     setUser(null);
     window.location.href = '/login';
