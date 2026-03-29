@@ -1,5 +1,6 @@
 ﻿const jwt = require('jsonwebtoken');
 const User = require('../models/userModel');
+const { verifyToken, authorizeRoles } = require('../middleware/authMiddleware');
 
 // Create JWT token
 function createToken(user) {
@@ -145,3 +146,8 @@ exports.deleteUser = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// Protect routes with RBAC
+router.get('/users', verifyToken, authorizeRoles('admin'), authController.listUsers);
+router.put('/users/:id', verifyToken, authorizeRoles('admin'), authController.updateUser);
+router.delete('/users/:id', verifyToken, authorizeRoles('admin'), authController.deleteUser);
