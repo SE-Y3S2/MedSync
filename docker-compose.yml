@@ -156,6 +156,7 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
+      - NEXT_PUBLIC_AUTH_SERVICE_URL=http://localhost:${AUTH_PORT:-5000}/auth
       - NEXT_PUBLIC_PATIENT_SERVICE_URL=http://localhost:${PATIENT_PORT:-3001}/api/patients
       - NEXT_PUBLIC_SYMPTOM_CHECKER_URL=http://localhost:${AI_PORT:-3007}/api/symptom-checker
       - NEXT_PUBLIC_DOCTOR_SERVICE_URL=http://localhost:${DOCTOR_PORT:-3002}/api/doctors

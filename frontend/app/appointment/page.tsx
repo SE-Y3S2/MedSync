@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { MedCard as Card, MedButton as Button, Badge, Skeleton, showToast, Tabs } from '../components/UI';
 import { appointmentApi, paymentApi } from '@/app/services/api';
+import { User, CalendarX } from 'lucide-react';
 
 export default function AppointmentListPage() {
     const [appointments, setAppointments] = useState<any[]>([]);
@@ -79,7 +80,7 @@ export default function AppointmentListPage() {
                 ) : filtered.length > 0 ? (
                     <div className="grid">
                         {filtered.map((appt) => (
-                            <Card key={appt._id} title={appt.doctorName} icon="👨‍⚕️">
+                            <Card key={appt._id} title={appt.doctorName} icon={<User size={20} />}>
                                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px' }}>
                                     <Badge text={appt.slotDate} variant="info" />
                                     <Badge text={appt.slotTime} variant="info" />
@@ -114,7 +115,7 @@ export default function AppointmentListPage() {
                     </div>
                 ) : (
                     <div className="empty-state">
-                        <div className="empty-icon">📅</div>
+                        <div className="empty-icon"><CalendarX size={48} /></div>
                         <h3>No appointments found</h3>
                         <p>You have no records in this category at the moment.</p>
                     </div>

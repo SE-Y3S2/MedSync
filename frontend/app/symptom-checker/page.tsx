@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { symptomApi } from '../services/api';
 import { Card, Button, Badge, showToast } from '../components/UI';
 import { useAuth } from '../context/AuthContext';
+import { Stethoscope, Hourglass, Search, ScrollText, Brain, AlertTriangle, FileText } from 'lucide-react';
 
 const commonSymptoms = [
   'Headache', 'Fever', 'Cough', 'Sore throat', 'Chest pain',
@@ -30,15 +31,15 @@ export default function SymptomCheckerPage() {
   const [showHistory, setShowHistory] = useState(false);
 
   useEffect(() => {
-    if (user?.patientId) {
+    if (user?.id) {
       fetchHistory();
     }
   }, [user]);
 
   const fetchHistory = async () => {
-    if (!user?.patientId) return;
+    if (!user?.id) return;
     try {
-      const data = await symptomApi.getHistory(user.patientId);
+      const data = await symptomApi.getHistory(user.id);
       setHistory(data);
     } catch (error) {
       console.error(error);
@@ -64,7 +65,7 @@ export default function SymptomCheckerPage() {
     setLoading(true);
     setResult(null);
     try {
-      const data = await symptomApi.analyzeSymptoms(allSymptoms, user?.patientId);
+      const data = await symptomApi.analyzeSymptoms(allSymptoms, user?.id);
       setResult(data);
       fetchHistory();
     } catch (error) {
@@ -89,7 +90,7 @@ export default function SymptomCheckerPage() {
 
       <div style={{ display: 'grid', gridTemplateColumns: showHistory ? '1fr 380px' : '1fr', gap: '24px' }}>
         <div>
-          <Card title="How are you feeling?" icon="🩺">
+          <Card title="How are you feeling?" icon={<Stethoscope size={20} />}>
             <form onSubmit={handleAnalyze}>
               {/* Quick Symptom Chips */}
               <div style={{ marginBottom: '20px' }}>
@@ -130,42 +131,44 @@ export default function SymptomCheckerPage() {
               </div>
 
               <div style={{ display: 'flex', gap: '10px' }}>
-                <Button type="submit" disabled={loading} icon={loading ? '⏳' : '🔍'}>
+                <Button type="submit" disabled={loading} icon={loading ? <Hourglass size={16} /> : <Search size={16} />}>
                   {loading ? 'Analyzing...' : 'Analyze Symptoms'}
                 </Button>
                 <Button variant="secondary" onClick={clearForm}>Clear</Button>
-                {user?.patientId && (
-                  <Button variant="secondary" onClick={() => setShowHistory(!showHistory)} icon="📜">
+                {user?.id && (
+                  <Button variant="secondary" onClick={() => setShowHistory(!showHistory)} icon={<ScrollText size={16} />}>
                     {showHistory ? 'Hide' : 'Show'} History
                   </Button>
                 )}
               </div>
 
-              <p className="disclaimer">
-                ⚠️ This AI tool provides preliminary suggestions based on keyword analysis. It is NOT a replacement for professional medical advice, diagnosis, or treatment.
+              <p className="disclaimer" style={{ display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                <AlertTriangle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                <span>This AI tool provides preliminary suggestions based on keyword analysis. It is NOT a replacement for professional medical advice, diagnosis, or treatment.</span>
               </p>
             </form>
           </Card>
 
           {/* ── Results ── */}
           {result && (
-            <Card title="AI Analysis Results" icon="🧠">
+            <Card title="AI Analysis Results" icon={<Brain size={20} />}>
               {/* Overall urgency & AI Summary */}
               <div style={{ marginBottom: '24px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
                   <span style={{ fontWeight: 600 }}>Overall Urgency:</span>
                   <Badge text={result.overallUrgency.toUpperCase()} variant={result.overallUrgency} />
                   {result.overallUrgency === 'emergency' && (
-                    <span style={{ color: 'var(--emergency)', fontWeight: 700, fontSize: '0.9rem' }}>
-                      ⚠ SEEK IMMEDIATE MEDICAL ATTENTION
+                    <span style={{ color: 'var(--emergency)', fontWeight: 700, fontSize: '0.9rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                      <AlertTriangle size={16} /> SEEK IMMEDIATE MEDICAL ATTENTION
                     </span>
                   )}
                 </div>
 
                 {result.aiSummary && (
                   <div style={{ padding: '16px', background: 'rgba(59, 130, 246, 0.05)', borderRadius: 'var(--radius-md)', borderLeft: '4px solid var(--primary)' }}>
-                    <p style={{ fontSize: '1rem', lineHeight: 1.6, color: 'var(--text-primary)' }}>
-                      📝 <strong>AI Insights:</strong> {result.aiSummary}
+                    <p style={{ fontSize: '1rem', lineHeight: 1.6, color: 'var(--text-primary)', display: 'flex', alignItems: 'flex-start', gap: '8px' }}>
+                      <FileText size={20} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--primary)' }} />
+                      <span><strong>AI Insights:</strong> {result.aiSummary}</span>
                     </p>
                   </div>
                 )}
@@ -217,10 +220,10 @@ export default function SymptomCheckerPage() {
         {/* ── History Sidebar ── */}
         {showHistory && (
           <div className="animate-in">
-            <Card title="Past Checks" icon="📜">
+            <Card title="Past Checks" icon={<ScrollText size={20} />}>
               {history.length === 0 ? (
                 <div className="empty-state">
-                  <div className="empty-icon">📜</div>
+                  <div className="empty-icon"><ScrollText size={48} /></div>
                   <h3>No History</h3>
                   <p>Your past symptom checks will appear here.</p>
                 </div>

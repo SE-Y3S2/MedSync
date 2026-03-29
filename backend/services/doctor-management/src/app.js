@@ -1,11 +1,16 @@
 const express = require('express');
 const cors = require('cors');
 
+const doctorRoutes = require('./routes/doctorRoutes');
+
 const app = express();
 
 // Middleware
 app.use(cors());
 app.use(express.json());
+
+// Routes
+app.use('/api/doctors', doctorRoutes);
 
 // Health check
 app.get('/', (req, res) => {

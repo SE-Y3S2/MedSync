@@ -12,10 +12,11 @@ const authMiddleware = (req, res, next) => {
     const token = authHeader.split(' ')[1];
     const decoded = jwt.verify(token, JWT_SECRET);
     
-    // Support multiple roles
+    // Support multiple roles and unified auth tokens
     req.user = {
-      patientId: decoded.patientId,
-      doctorId: decoded.doctorId,
+      id: decoded.id || decoded.patientId || decoded.doctorId,
+      patientId: decoded.patientId || decoded.id,
+      doctorId: decoded.doctorId || decoded.id,
       email: decoded.email,
       role: decoded.role || (decoded.patientId ? 'patient' : null)
     };

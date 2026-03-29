@@ -1,59 +1,146 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { MedCard as Card, MedInput as Input, MedButton as Button, showToast } from '../components/UI';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Lock } from 'lucide-react';
 
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [role, setRole] = useState<'patient' | 'doctor' | 'admin'>('patient');
     const [loading, setLoading] = useState(false);
-    const { login } = useAuth();
+    const { login, user } = useAuth();
     const router = useRouter();
+
+    // Redirect if already logged in
+    useEffect(() => {
+        if (user) {
+            if (user.role === 'admin') router.push('/admin');
+            else if (user.role === 'doctor') router.push('/doctor');
+            else router.push('/patient');
+        }
+    }, [user, router]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         try {
-            await login(email, password, role);
-            showToast(`Welcome back to MedSync! Logged in as ${role}.`, 'success');
-            if (role === 'admin') router.push('/admin');
-            else if (role === 'doctor') router.push('/doctor');
-            else router.push('/');
+            const loggedInUser = await login(email, password, role);
+            showToast(`Welcome back, ${loggedInUser.name}!`, 'success');
+            
+            // Redirection logic handled by useEffect above, but we can do it here for speed
+            if (loggedInUser.role === 'admin') router.push('/admin');
+            else if (loggedInUser.role === 'doctor') router.push('/doctor');
+            else router.push('/patient');
+            
         } catch (err: any) {
-            showToast(err.message || 'Login failed', 'error');
+            showToast(err.message || 'Login failed. Please check your credentials.', 'error');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="animate-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh' }}>
-            <div style={{ width: '100%', maxWidth: '420px' }}>
-                <Card title="Sign In" icon="🔑">
-                    <form onSubmit={handleSubmit}>
-                        <Input label="Email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} required />
-                        <Input label="Password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
-                        
-                        <div className="med-input-group" style={{ marginTop: '16px' }}>
-                            <label className="med-label">Login As</label>
-                            <select className="med-input" value={role} onChange={(e) => setRole(e.target.value as any)}>
-                                <option value="patient">Patient</option>
-                                <option value="doctor">Doctor</option>
-                                <option value="admin">Administrator</option>
-                            </select>
-                        </div>
+        <div className="login-wrapper">
+            <style jsx>{`
+                .login-wrapper {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    min-height: 90vh;
+                    background: #f8fafc;
+                }
+                .login-container {
+                    width: 100%;
+                    max-width: 400px;
+                    padding: 20px;
+                }
+                .login-header {
+                    text-align: center;
+                    margin-bottom: 32px;
+                }
+                .login-header h2 {
+                    font-size: 1.8rem;
+                    font-weight: 800;
+                    color: #0f172a;
+                    margin-bottom: 8px;
+                }
+                .login-header p {
+                    color: #64748b;
+                    font-size: 0.95rem;
+                }
+            `}</style>
 
-                        <Button type="submit" className="navy" disabled={loading} style={{ width: '100%', marginTop: '12px' }}>
-                            {loading ? 'Entering...' : 'Login'}
+            <div className="login-container">
+                <div className="login-header">
+                    <h2>Welcome Back</h2>
+                    <p>Enter your credentials to access your dashboard</p>
+                </div>
+
+                <Card title="Sign In" icon={<Lock size={20} />}>
+                    {/* Segmented Control */}
+                    <div style={{ 
+                        display: 'flex', 
+                        background: 'var(--card-border)', 
+                        padding: '4px', 
+                        borderRadius: 'var(--radius-lg)', 
+                        marginBottom: '24px' 
+                    }}>
+                        {(['patient', 'doctor', 'admin'] as const).map(r => (
+                            <button 
+                                key={r}
+                                type="button"
+                                onClick={() => setRole(r)}
+                                style={{
+                                    flex: 1, padding: '10px 0', borderRadius: 'calc(var(--radius-lg) - 4px)',
+                                    border: 'none', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s ease',
+                                    background: role === r ? 'var(--primary)' : 'transparent',
+                                    color: role === r ? 'white' : 'var(--text-secondary)',
+                                    boxShadow: role === r ? 'var(--shadow-sm)' : 'none',
+                                    textTransform: 'capitalize',
+                                    fontSize: '0.9rem'
+                                }}>
+                                {r}
+                            </button>
+                        ))}
+                    </div>
+
+                    <form onSubmit={handleSubmit} style={{ padding: '8px 4px' }}>
+                        <Input 
+                            label="Email Address" 
+                            type="email" 
+                            placeholder="name@company.com"
+                            value={email} 
+                            onChange={(e) => setEmail(e.target.value)} 
+                            required 
+                        />
+                        <Input 
+                            label="Password" 
+                            type="password" 
+                            placeholder="••••••••"
+                            value={password} 
+                            onChange={(e) => setPassword(e.target.value)} 
+                            required 
+                        />
+                        
+                        <Button 
+                            type="submit" 
+                            className="primary" 
+                            disabled={loading} 
+                            style={{ width: '100%', marginTop: '24px', padding: '12px', fontSize: '1rem' }}
+                        >
+                            {loading ? 'Signing in...' : 'Sign In'}
                         </Button>
                     </form>
-                    <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.9rem' }}>
-                        New to MedSync? <Link href="/register">Join Now</Link>
-                    </p>
+
+                    <div style={{ textAlign: 'center', marginTop: '24px', paddingTop: '20px', borderTop: '1px solid #f1f5f9' }}>
+                        <p style={{ fontSize: '0.9rem', color: '#64748b' }}>
+                            New to MedSync? <Link href="/register" style={{ color: '#0ea5e9', fontWeight: 600, textDecoration: 'none' }}>Create an account</Link>
+                        </p>
+                    </div>
                 </Card>
             </div>
         </div>

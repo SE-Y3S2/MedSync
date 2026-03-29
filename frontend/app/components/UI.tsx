@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 /* ── Card ── */
 interface CardProps {
   title: string;
-  icon?: string;
+  icon?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }
@@ -28,7 +28,7 @@ interface ButtonProps {
   variant?: 'primary' | 'secondary' | 'danger';
   size?: 'sm' | 'md';
   disabled?: boolean;
-  icon?: string;
+  icon?: React.ReactNode;
 }
 
 export const Button = ({ children, onClick, type = 'button', variant = 'primary', size, disabled = false, icon }: ButtonProps) => (
@@ -38,7 +38,7 @@ export const Button = ({ children, onClick, type = 'button', variant = 'primary'
     disabled={disabled}
     className={`med-button ${variant} ${size || ''}`}
   >
-    {icon && <span>{icon}</span>}
+    {icon && <span className="btn-icon">{icon}</span>}
     {children}
   </button>
 );
@@ -143,11 +143,7 @@ export const ToastContainer = () => {
     <div className="toast-container">
       {toasts.map(t => (
         <div key={t.id} className={`toast ${t.type}`}>
-          {t.type === 'success' && '✓ '}
-          {t.type === 'error' && '✕ '}
-          {t.type === 'warning' && '⚠ '}
-          {t.type === 'info' && 'ℹ '}
-          {t.text}
+          <div className="toast-content">{t.text}</div>
         </div>
       ))}
     </div>
@@ -214,7 +210,7 @@ export const MedButton = ({ children, onClick, type = 'button', variant = 'prima
     className={`med-button ${variant} ${size || ''} ${className || ''}`}
     style={style}
   >
-    {icon && <span>{icon}</span>}
+    {icon && <span className="btn-icon">{icon}</span>}
     {children}
   </button>
 );

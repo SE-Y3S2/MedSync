@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import { doctorApi, appointmentApi } from '../services/api';
+import { Clock, Video } from 'lucide-react';
 
 export default function DoctorDashboard() {
   const { user, isLoading } = useAuth();
@@ -88,11 +89,11 @@ export default function DoctorDashboard() {
             <Link href="/doctor/appointments" className="med-button primary" style={{ justifyContent: 'center' }}>
               Manage Appointments
             </Link>
-            <Link href="/doctor/availability" className="med-button secondary" style={{ justifyContent: 'center' }}>
-              🕒 Configure My Schedule
+            <Link href="/doctor/availability" className="med-button secondary" style={{ justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Clock size={16} /> Configure My Schedule
             </Link>
-            <Link href="/telemedicine" className="med-button primary" style={{ justifyContent: 'center' }}>
-              🎥 Start Telemedicine Session
+            <Link href="/telemedicine" className="med-button primary" style={{ justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Video size={16} /> Start Telemedicine Session
             </Link>
           </div>
         </div>

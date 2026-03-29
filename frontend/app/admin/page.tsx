@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { doctorApi } from '../services/api';
+import { ShieldBan } from 'lucide-react';
 
 export default function AdminDashboard() {
   const { user, isLoading } = useAuth();
@@ -42,7 +43,7 @@ export default function AdminDashboard() {
   if (user?.role !== 'admin') {
     return (
       <div className="empty-state">
-        <div className="empty-icon">🚫</div>
+        <div className="empty-icon"><ShieldBan size={48} /></div>
         <h3>Access Denied</h3>
         <p>You do not have permission to view this page.</p>
       </div>

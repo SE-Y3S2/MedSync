@@ -4,6 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import { MedCard as Card, MedButton as Button, showToast, Skeleton, Badge, MedInput as Input } from '../../../components/UI';
 import { doctorApi, appointmentApi } from '@/app/services/api';
 import { useRouter } from 'next/navigation';
+import { User, CalendarCheck } from 'lucide-react';
 
 export default function BookingPage({ params }: { params: Promise<{ doctorId: string }> }) {
     const { doctorId } = use(params);
@@ -78,7 +79,7 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
             </header>
 
             <div className="grid-2" style={{ display: 'grid', gridTemplateColumns: 'minmax(300px, 1fr) 1.2fr', gap: '24px' }}>
-                <Card title="Consultant" icon="👨‍⚕️" className="glass-card-navy">
+                <Card title="Consultant" icon={<User size={20} />} className="glass-card-navy">
                     <div style={{ textAlign: 'center', marginBottom: '24px' }}>
                         <div className="avatar lg" style={{ margin: '0 auto 16px', backgroundImage: 'linear-gradient(135deg, var(--oxford-navy), var(--bright-marine))' }}>
                             {doctor?.name?.charAt(0)}
@@ -93,7 +94,7 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
                     </div>
                 </Card>
 
-                <Card title="Appointment Data" icon="📅">
+                <Card title="Appointment Data" icon={<CalendarCheck size={20} />}>
                     <Input
                         label="Preferred Date"
                         type="date"

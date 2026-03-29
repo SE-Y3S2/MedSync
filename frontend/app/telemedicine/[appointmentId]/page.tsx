@@ -33,15 +33,37 @@ export default function TelemedicineSession() {
   const loadData = async () => {
     try {
       setLoading(true);
-      // Fetch session
-      const sessData = await telemedicineApi.getSession(appointmentId as string);
-      setSession(sessData);
-      
-      // We don't have a direct "getAppointment" yet on the API but assuming the session fetched is valid.
-      // We can mock the appointment details if necessary.
-      setLoading(false);
+      const apptId = appointmentId as string;
+
+      let appt: any = null;
+      try {
+        appt = await appointmentApi.getAppointment(apptId);
+        setAppointment(appt);
+      } catch (e) {
+        appt = null;
+      }
+
+      try {
+        const sessData = await telemedicineApi.getSession(apptId);
+        setSession(sessData);
+      } catch (e) {
+        if (!appt) {
+          setSession(null);
+          return;
+        }
+
+        const sessData = await telemedicineApi.createSession({
+          appointmentId: apptId,
+          doctorId: appt.doctorId,
+          patientId: appt.patientId,
+        });
+        setSession(sessData);
+      }
     } catch (err) {
       console.error(err);
+      setSession(null);
+    }
+    finally {
       setLoading(false);
     }
   };
@@ -61,7 +83,7 @@ export default function TelemedicineSession() {
       if (user?.role === 'doctor') {
         router.push('/doctor/appointments');
       } else {
-        router.push('/');
+        router.push('/patient');
       }
     } catch (err) {
       alert('Failed to end session cleanly');
