@@ -6,12 +6,15 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ToastContainer } from './UI';
 import { useAuth } from '../context/AuthContext';
 
-import { Shield, UserCog, Stethoscope, Clock, Calendar, Home, Search, CalendarClock, User, FileText, Bot } from 'lucide-react';
+import { 
+  Shield, UserCog, Stethoscope, Clock, Calendar, Home, 
+  Search, CalendarClock, User, FileText, Bot, Video, LayoutDashboard 
+} from 'lucide-react';
 
 const getNavItems = (role?: string) => {
   if (role === 'admin') {
     return [
-      { href: '/admin', label: 'Admin Dashboard', icon: <Shield size={20} /> },
+      { href: '/admin', label: 'Admin Dashboard', icon: <LayoutDashboard size={20} /> },
       { href: '/admin/doctors', label: 'Manage Doctors', icon: <UserCog size={20} /> }
     ];
   }
@@ -19,13 +22,15 @@ const getNavItems = (role?: string) => {
     return [
       { href: '/doctor', label: 'Doctor Dashboard', icon: <Stethoscope size={20} /> },
       { href: '/doctor/availability', label: 'My Schedule', icon: <Clock size={20} /> },
-      { href: '/doctor/appointments', label: 'Appointments', icon: <Calendar size={20} /> }
+      { href: '/doctor/appointments', label: 'Appointments', icon: <Calendar size={20} /> },
+      { href: '/telemedicine', label: 'Virtual Meetings', icon: <Video size={20} /> }
     ];
   }
   return [
     { href: '/patient', label: 'Dashboard', icon: <Home size={20} /> },
     { href: '/appointment/search', label: 'Find Doctors', icon: <Search size={20} /> },
     { href: '/appointment', label: 'My Appointments', icon: <CalendarClock size={20} /> },
+    { href: '/telemedicine', label: 'Join Consultation', icon: <Video size={20} /> },
     { href: '/patient/profile', label: 'My Profile', icon: <User size={20} /> },
     { href: '/patient/records', label: 'Records & Documents', icon: <FileText size={20} /> },
     { href: '/symptom-checker', label: 'AI Symptom Checker', icon: <Bot size={20} /> },
@@ -120,17 +125,23 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="sidebar-nav">
-            {navItems.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`sidebar-link ${pathname === item.href ? 'active' : ''}`}
-                onClick={() => setIsOpen(false)}
-              >
-                <span className="nav-icon">{item.icon}</span>
-                {item.label}
-              </Link>
-            ))}
+            {navItems.map((item) => {
+              const isActive = item.href === '/admin' || item.href === '/doctor' || item.href === '/patient' 
+                ? pathname === item.href 
+                : pathname.startsWith(item.href);
+
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  className={`sidebar-link ${isActive ? 'active' : ''}`}
+                  onClick={() => setIsOpen(false)}
+                >
+                  <span className="nav-icon">{item.icon}</span>
+                  {item.label}
+                </Link>
+              );
+            })}
           </nav>
 
           <div className="sidebar-footer">

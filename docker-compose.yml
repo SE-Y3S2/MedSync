@@ -22,34 +22,14 @@ services:
       - "9092:9092"
 
   # Databases
-  mongo:
-    image: mongo:6.0
-    ports:
-      - "27017:27017"
-    volumes:
-      - mongo-data:/data/db
-    environment:
-      MONGO_INITDB_ROOT_USERNAME: ${MONGO_INITDB_ROOT_USERNAME:-admin}
-      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_INITDB_ROOT_PASSWORD:-password}
-
   redis:
     image: redis:7.0-alpine
     ports:
       - "6379:6379"
+    volumes:
+      - redis-data:/data
 
   # Backend Services
-  auth:
-    build: ./backend/services/auth
-    ports:
-      - "${AUTH_PORT:-5000}:5000"
-    depends_on:
-      - mongo
-    environment:
-      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongo:27017/medsync?authSource=admin
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRE=${JWT_EXPIRE:-7d}
-      - PORT=5000
-
   notification:
     build: ./backend/services/notification
     ports:
@@ -73,10 +53,9 @@ services:
       - "${PATIENT_PORT:-3001}:3001"
     depends_on:
       - kafka
-      - mongo
     environment:
       - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
-      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongo:27017/patient_db?authSource=admin
+      - MONGO_URI=mongodb+srv://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_ATLAS_CLUSTER}/patient_db?retryWrites=true&w=majority
       - PORT=3001
       - JWT_SECRET=${JWT_SECRET}
 
@@ -86,10 +65,9 @@ services:
       - "${DOCTOR_PORT:-3002}:3002"
     depends_on:
       - kafka
-      - mongo
     environment:
       - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
-      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongo:27017/doctor_db?authSource=admin
+      - MONGO_URI=mongodb+srv://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_ATLAS_CLUSTER}/doctor_db?retryWrites=true&w=majority
       - PORT=3002
       - JWT_SECRET=${JWT_SECRET}
 
@@ -99,10 +77,9 @@ services:
       - "${APPOINTMENT_PORT:-3003}:3003"
     depends_on:
       - kafka
-      - mongo
     environment:
       - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
-      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongo:27017/appointment_db?authSource=admin
+      - MONGO_URI=mongodb+srv://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_ATLAS_CLUSTER}/appointment_db?retryWrites=true&w=majority
       - DOCTOR_SERVICE_URL=http://doctor-management:3002
       - PORT=3003
       - JWT_SECRET=${JWT_SECRET}
@@ -129,10 +106,9 @@ services:
       - "${PAYMENT_PORT:-3005}:3005"
     depends_on:
       - kafka
-      - mongo
     environment:
       - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
-      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongo:27017/payment_db?authSource=admin
+      - MONGO_URI=mongodb+srv://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_ATLAS_CLUSTER}/payment_db?retryWrites=true&w=majority
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
@@ -172,4 +148,5 @@ services:
       - ai-symptom-checker
 
 volumes:
-  mongo-data:
+  redis-data:
+
