@@ -11,12 +11,12 @@ const connectDB = async () => {
     try {
         const uri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/medsync';
         if (!process.env.MONGO_URI) {
-            console.warn('[payment] MONGO_URI is not set; using local default.');
+            console.warn('[appointment] MONGO_URI is not set; using local default.');
         }
         const conn = await mongoose.connect(uri, mongoOpts);
-        console.log(`[Payment] MongoDB Connected: ${conn.connection.host}`);
+        console.log(`[Appointment] MongoDB Connected: ${conn.connection.host}`);
     } catch (error) {
-        console.error(`[Payment] DB Error: ${error.message}`);
+        console.error(`[Appointment] DB Error: ${error.message}`);
         process.exit(1);
     }
 };

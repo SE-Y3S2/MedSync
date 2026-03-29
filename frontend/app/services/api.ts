@@ -44,12 +44,22 @@ export const patientApi = {
     return response.json();
   },
   register: async (data: any) => {
+    const { role: _role, ...payload } = data;
     const response = await fetch(`${PATIENT_SERVICE_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
-    if (!response.ok) throw new Error('Failed to register patient');
+    if (!response.ok) {
+      let message = 'Failed to register patient';
+      try {
+        const err = await response.json();
+        if (err?.message) message = err.message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
+    }
     return response.json();
   },
 
@@ -195,12 +205,22 @@ export const doctorApi = {
     return response.json();
   },
   register: async (data: any) => {
+    const { role: _role, ...payload } = data;
     const response = await fetch(`${DOCTOR_SERVICE_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data)
+      body: JSON.stringify(payload)
     });
-    if (!response.ok) throw new Error('Failed to register doctor');
+    if (!response.ok) {
+      let message = 'Failed to register doctor';
+      try {
+        const err = await response.json();
+        if (err?.message) message = err.message;
+      } catch {
+        /* ignore */
+      }
+      throw new Error(message);
+    }
     return response.json();
   },
   getAvailability: async (id: string) => {

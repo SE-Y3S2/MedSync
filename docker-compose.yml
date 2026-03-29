@@ -1,4 +1,3 @@
-
 services:
   # Kafka & Zookeeper for message streaming
   zookeeper:
@@ -51,13 +50,15 @@ services:
 
   patient-management:
     build: ./backend/services/patient-management
+    env_file:
+      - .env
     ports:
       - "${PATIENT_PORT:-3001}:3001"
     depends_on:
       - kafka
     environment:
       - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
-      - MONGO_URI=mongodb+srv://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_ATLAS_CLUSTER}/patient_db?retryWrites=true&w=majority
+      - MONGO_URI=${MONGO_URI}
       - PORT=3001
       - JWT_SECRET=${JWT_SECRET}
 
@@ -69,19 +70,21 @@ services:
       - kafka
     environment:
       - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
-      - MONGO_URI=mongodb+srv://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_ATLAS_CLUSTER}/doctor_db?retryWrites=true&w=majority
+      - MONGO_URI=${MONGO_URI}
       - PORT=3002
       - JWT_SECRET=${JWT_SECRET}
 
   appointment:
     build: ./backend/services/appointment
+    env_file:
+      - .env
     ports:
       - "${APPOINTMENT_PORT:-3003}:3003"
     depends_on:
       - kafka
     environment:
       - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
-      - MONGO_URI=mongodb+srv://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_ATLAS_CLUSTER}/appointment_db?retryWrites=true&w=majority
+      - MONGO_URI=${MONGO_URI}
       - DOCTOR_SERVICE_URL=http://doctor-management:3002
       - PORT=3003
       - JWT_SECRET=${JWT_SECRET}
@@ -110,7 +113,7 @@ services:
       - kafka
     environment:
       - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
-      - MONGO_URI=mongodb+srv://${MONGODB_USER}:${MONGODB_PASSWORD}@${MONGODB_ATLAS_CLUSTER}/payment_db?retryWrites=true&w=majority
+      - MONGO_URI=${MONGO_URI}
       - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
       - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
@@ -119,18 +122,30 @@ services:
 
   ai-symptom-checker:
     build: ./backend/services/ai-symptom-checker
+    env_file:
+      - .env
     ports:
       - "${AI_PORT:-3007}:3007"
     depends_on:
       - kafka
     environment:
       - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - MONGO_URI=${MONGO_URI}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PORT=3007
       - JWT_SECRET=${JWT_SECRET}
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_AUTH_SERVICE_URL: http://localhost:${AUTH_PORT:-5000}/auth
+        NEXT_PUBLIC_PATIENT_SERVICE_URL: http://localhost:${PATIENT_PORT:-3001}/api/patients
+        NEXT_PUBLIC_SYMPTOM_CHECKER_URL: http://localhost:${AI_PORT:-3007}/api/symptom-checker
+        NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL: http://localhost:${TELEMEDICINE_PORT:-3004}/api/sessions
+        NEXT_PUBLIC_DOCTOR_SERVICE_URL: http://localhost:${DOCTOR_PORT:-3002}/api/doctors
+        NEXT_PUBLIC_APPOINTMENT_SERVICE_URL: http://localhost:${APPOINTMENT_PORT:-3003}/api/appointments
+        NEXT_PUBLIC_PAYMENT_SERVICE_URL: http://localhost:${PAYMENT_PORT:-3005}/api/payments
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
@@ -150,4 +165,5 @@ services:
 
 volumes:
   redis-data:
+
 

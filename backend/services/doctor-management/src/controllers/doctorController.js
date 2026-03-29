@@ -12,6 +12,20 @@ exports.registerDoctor = async (req, res) => {
       return res.status(400).json({ message: 'Email and password are required.' });
     }
 
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ message: 'Name is required.' });
+    }
+
+    const specialtyResolved =
+      (specialty && String(specialty).trim()) || 'General Practice';
+
+    let quals = [];
+    if (Array.isArray(qualifications)) {
+      quals = qualifications.map((q) => String(q).trim()).filter(Boolean);
+    } else if (typeof qualifications === 'string' && qualifications.trim()) {
+      quals = qualifications.split(',').map((q) => q.trim()).filter(Boolean);
+    }
+
     const existing = await Doctor.findOne({ 'contact.email': contact.email });
     if (existing) {
       return res.status(409).json({ message: 'A doctor with this email already exists.' });
@@ -20,7 +34,11 @@ exports.registerDoctor = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 12);
     
     const doctor = new Doctor({
-      name, specialty, qualifications, contact, bio,
+      name,
+      specialty: specialtyResolved,
+      qualifications: quals,
+      contact,
+      bio,
       password: hashedPassword,
       isVerified: false
     });

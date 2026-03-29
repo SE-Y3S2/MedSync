@@ -71,13 +71,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else {
       data = await patientApi.register(formData);
     }
-    
+
+    const userRecord =
+      data.user || data.doctor || data.patient || data.admin;
+    if (!userRecord) {
+      throw new Error('Registration succeeded but user payload was missing.');
+    }
+
     authService.setToken(data.token);
-    localStorage.setItem('medsync_user', JSON.stringify(data.user));
-    
+    localStorage.setItem('medsync_user', JSON.stringify(userRecord));
+
     setToken(data.token);
-    setUser(data.user);
-    return data.user;
+    setUser(userRecord);
+    return userRecord;
   };
 
   const logout = () => {
