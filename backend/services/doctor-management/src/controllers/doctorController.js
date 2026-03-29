@@ -81,6 +81,9 @@ exports.getDoctor = async (req, res) => {
 
 exports.updateDoctor = async (req, res) => {
   try {
+    if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.id) {
+        return res.status(403).json({ message: 'Forbidden: You can only update your own profile.' });
+    }
     const doctor = await Doctor.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
     res.json(doctor);
@@ -103,6 +106,9 @@ exports.listDoctors = async (req, res) => {
 // Bonus implementation
 exports.getAnalytics = async (req, res) => {
   try {
+    if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.id) {
+        return res.status(403).json({ message: 'Forbidden: You cannot view analytics for another doctor.' });
+    }
     const doctor = await Doctor.findById(req.params.id);
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
     res.json(doctor.analytics);

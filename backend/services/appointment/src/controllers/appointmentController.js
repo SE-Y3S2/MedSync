@@ -49,6 +49,10 @@ exports.createAppointment = async (req, res, next) => {
             slotDate, slotTime, reason, consultationFee,
         } = req.body;
 
+        if (req.user && req.user.role !== 'admin' && req.user.id !== patientId) {
+            return res.status(403).json({ message: 'Forbidden: You can only book appointments for yourself.' });
+        }
+
         // Prevent double-booking the same slot
         const conflict = await Appointment.findOne({
             doctorId, slotDate, slotTime,
@@ -93,6 +97,12 @@ exports.getAppointment = async (req, res, next) => {
     try {
         const appointment = await Appointment.findById(req.params.id);
         if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
+        
+        // Authorization check
+        if (req.user && req.user.role !== 'admin' && req.user.id !== appointment.patientId && req.user.id !== appointment.doctorId) {
+            return res.status(403).json({ message: 'Forbidden: Unauthorized access to this appointment.' });
+        }
+
         res.json(appointment);
     } catch (error) {
         next(error);
@@ -102,6 +112,10 @@ exports.getAppointment = async (req, res, next) => {
 // ── Patient's Appointments (with auto-cancel check) ───────────────────────────
 exports.getPatientAppointments = async (req, res, next) => {
     try {
+        if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.patientId) {
+            return res.status(403).json({ message: 'Forbidden: You cannot view another patient\'s appointments.' });
+        }
+
         // Auto-cancel unpaid pending appointments older than 30 mins
         const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
         await Appointment.updateMany(
@@ -133,6 +147,10 @@ exports.getPatientAppointments = async (req, res, next) => {
 // ── Doctor's Appointments ────────────────────────────────────────────────────
 exports.getDoctorAppointments = async (req, res, next) => {
     try {
+        if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.doctorId) {
+            return res.status(403).json({ message: 'Forbidden: You cannot view another doctor\'s schedule.' });
+        }
+
         const { status, date } = req.query;
         const filter = { doctorId: req.params.doctorId };
         if (status) filter.status = status;
@@ -241,6 +259,10 @@ exports.getBookedSlots = async (req, res, next) => {
 // ── Doctor Dashboard Stats ────────────────────────────────────────────────────
 exports.getDoctorStats = async (req, res, next) => {
     try {
+        if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.doctorId) {
+            return res.status(403).json({ message: 'Forbidden: You cannot view another doctor\'s analytics.' });
+        }
+
         const { doctorId } = req.params;
         const [total, pending, confirmed, completed, cancelled] = await Promise.all([
             Appointment.countDocuments({ doctorId }),
