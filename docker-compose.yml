@@ -30,6 +30,8 @@ services:
       - redis-data:/data
 
   # Backend Services
+
+
   notification:
     build: ./backend/services/notification
     ports:
