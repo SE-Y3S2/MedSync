@@ -38,17 +38,7 @@ services:
       - "6379:6379"
 
   # Backend Services
-  auth:
-    build: ./backend/services/auth
-    ports:
-      - "${AUTH_PORT:-5000}:5000"
-    depends_on:
-      - mongo
-    environment:
-      - MONGO_URI=mongodb://${MONGO_INITDB_ROOT_USERNAME:-admin}:${MONGO_INITDB_ROOT_PASSWORD:-password}@mongo:27017/medsync?authSource=admin
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRE=${JWT_EXPIRE:-7d}
-      - PORT=5000
+
 
   notification:
     build: ./backend/services/notification
