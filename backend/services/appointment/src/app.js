@@ -1,10 +1,11 @@
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
 const connectDB = require('./config/db');
 const appointmentRoutes = require('./routes/appointmentRoutes');
 
 const app = express();
+
+connectDB();
 
 // Middleware
 app.use(cors());

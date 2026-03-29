@@ -168,7 +168,27 @@ export default function RegisterPage() {
                                     </div>
                                     <div className="grid-2" style={{ gap: '16px', display: 'grid', gridTemplateColumns: '1fr 1fr' }}>
                                         <Input label="Password" name="password" type="password" value={formData.password} onChange={handleChange} required />
-                                        <Input label="Primary Specialty" name="specialty" value={formData.specialty} onChange={handleChange} placeholder="e.g. Cardiology" required />
+                                        <div className="med-input-group" style={{ marginBottom: 0 }}>
+                                            <label className="med-label">Primary Specialty</label>
+                                            <select
+                                                name="specialty"
+                                                className="med-input"
+                                                value={formData.specialty}
+                                                onChange={handleChange}
+                                                required
+                                                style={{ height: '42px' }}
+                                            >
+                                                <option value="">Select specialty</option>
+                                                <option value="General Practice">General Practice</option>
+                                                <option value="Cardiology">Cardiology</option>
+                                                <option value="Dermatology">Dermatology</option>
+                                                <option value="Neurology">Neurology</option>
+                                                <option value="Pediatrics">Pediatrics</option>
+                                                <option value="Psychiatry">Psychiatry</option>
+                                                <option value="Orthopedics">Orthopedics</option>
+                                                <option value="Other">Other</option>
+                                            </select>
+                                        </div>
                                     </div>
                                     <Input label="Qualifications (Comma separated)" name="qualifications" value={formData.qualifications} onChange={handleChange} placeholder="MBBS, MD, FACC" />
                                     <div className="med-input-group">
