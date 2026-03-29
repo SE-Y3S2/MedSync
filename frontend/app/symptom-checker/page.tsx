@@ -136,7 +136,11 @@ export default function SymptomCheckerPage() {
                 </Button>
                 <Button variant="secondary" onClick={clearForm}>Clear</Button>
                 {user?.id && (
+<<<<<<< Updated upstream
                   <Button variant="secondary" onClick={() => setShowHistory(!showHistory)} icon={<ScrollText size={16} />}>
+=======
+                  <Button variant="secondary" onClick={() => setShowHistory(!showHistory)} icon="📜">
+>>>>>>> Stashed changes
                     {showHistory ? 'Hide' : 'Show'} History
                   </Button>
                 )}
