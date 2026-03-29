@@ -8,7 +8,7 @@ import { patientApi, doctorApi, adminApi } from '../services/api';
 interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
-  login: (email: string, password: string, role?: string) => Promise<AuthUser>;
+  login: (email: string, password: string) => Promise<AuthUser>;
   register: (data: any) => Promise<AuthUser>;
   logout: () => void;
   isLoading: boolean;
@@ -32,22 +32,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(false);
   }, []);
 
-  const login = async (email: string, password: string, role: string = 'patient') => {
+  const login = async (email: string, password: string) => {
     let data;
-    if (role === 'doctor') {
-      data = await doctorApi.login({ email, password });
-    } else if (role === 'admin') {
-      data = await adminApi.login({ email, password });
+
+    // 1. Try Admin (Hardcoded checks run lightning fast natively)
+    if (email === 'admin@medsync.com') {
+      try {
+        data = await adminApi.login({ email, password });
+      } catch (err) {
+        throw new Error('Invalid admin credentials.');
+      }
     } else {
-      data = await patientApi.login({ email, password });
+      // 2. Try Doctor Database
+      try {
+        data = await doctorApi.login({ email, password });
+      } catch (err) {
+        // 3. Fallback to Patient Database
+        try {
+          data = await patientApi.login({ email, password });
+        } catch (innerErr) {
+          throw new Error('Invalid email or password.');
+        }
+      }
     }
     
     authService.setToken(data.token);
-    localStorage.setItem('medsync_user', JSON.stringify(data.user));
+    localStorage.setItem('medsync_user', JSON.stringify(data.user || data.doctor || data.patient || data.admin));
     
     setToken(data.token);
-    setUser(data.user);
-    return data.user;
+    setUser(data.user || data.doctor || data.patient || data.admin);
+    return (data.user || data.doctor || data.patient || data.admin);
   };
 
   const register = async (formData: any) => {

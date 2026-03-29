@@ -10,7 +10,6 @@ import { Lock } from 'lucide-react';
 export default function LoginPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [role, setRole] = useState<'patient' | 'doctor' | 'admin'>('patient');
     const [loading, setLoading] = useState(false);
     const { login, user } = useAuth();
     const router = useRouter();
@@ -28,7 +27,7 @@ export default function LoginPage() {
         e.preventDefault();
         setLoading(true);
         try {
-            const loggedInUser = await login(email, password, role);
+            const loggedInUser = await login(email, password);
             showToast(`Welcome back, ${loggedInUser.name}!`, 'success');
             
             // Redirection logic handled by useEffect above, but we can do it here for speed
@@ -81,33 +80,6 @@ export default function LoginPage() {
                 </div>
 
                 <Card title="Sign In" icon={<Lock size={20} />}>
-                    {/* Segmented Control */}
-                    <div style={{ 
-                        display: 'flex', 
-                        background: 'var(--card-border)', 
-                        padding: '4px', 
-                        borderRadius: 'var(--radius-lg)', 
-                        marginBottom: '24px' 
-                    }}>
-                        {(['patient', 'doctor', 'admin'] as const).map(r => (
-                            <button 
-                                key={r}
-                                type="button"
-                                onClick={() => setRole(r)}
-                                style={{
-                                    flex: 1, padding: '10px 0', borderRadius: 'calc(var(--radius-lg) - 4px)',
-                                    border: 'none', cursor: 'pointer', fontWeight: 600, transition: 'all 0.2s ease',
-                                    background: role === r ? 'var(--primary)' : 'transparent',
-                                    color: role === r ? 'white' : 'var(--text-secondary)',
-                                    boxShadow: role === r ? 'var(--shadow-sm)' : 'none',
-                                    textTransform: 'capitalize',
-                                    fontSize: '0.9rem'
-                                }}>
-                                {r}
-                            </button>
-                        ))}
-                    </div>
-
                     <form onSubmit={handleSubmit} style={{ padding: '8px 4px' }}>
                         <Input 
                             label="Email Address" 
