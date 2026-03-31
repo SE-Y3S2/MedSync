@@ -55,10 +55,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-    
+
     authService.setToken(data.token);
     localStorage.setItem('medsync_user', JSON.stringify(data.user || data.doctor || data.patient || data.admin));
-    
+
     setToken(data.token);
     setUser(data.user || data.doctor || data.patient || data.admin);
     return (data.user || data.doctor || data.patient || data.admin);
