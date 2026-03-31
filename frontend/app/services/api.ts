@@ -146,6 +146,23 @@ export const patientApi = {
     });
     if (!response.ok) throw new Error('Failed to delete document');
     return response.json();
+  },
+
+  // For Doctors to review (Kaveen's part)
+  getPatientRecords: async (patientId: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/${patientId}/records`, {
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to fetch patient records');
+    return response.json();
+  },
+
+  getPatientDocuments: async (patientId: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/${patientId}/documents`, {
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to fetch patient documents');
+    return response.json();
   }
 };
 
@@ -243,6 +260,11 @@ export const doctorApi = {
       headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error('Failed to delete slot');
+    return response.json();
+  },
+  getAnalytics: async (id: string) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/${id}/analytics`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch analytics');
     return response.json();
   }
 };
