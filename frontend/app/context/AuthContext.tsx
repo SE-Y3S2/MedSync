@@ -55,13 +55,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
     }
-
+    
+    const userRecord = data.user || data.doctor || data.patient || data.admin;
+    if (data.doctor && !userRecord.role) userRecord.role = 'doctor';
+    
     authService.setToken(data.token);
-    localStorage.setItem('medsync_user', JSON.stringify(data.user || data.doctor || data.patient || data.admin));
-
+    localStorage.setItem('medsync_user', JSON.stringify(userRecord));
+    
     setToken(data.token);
-    setUser(data.user || data.doctor || data.patient || data.admin);
-    return (data.user || data.doctor || data.patient || data.admin);
+    setUser(userRecord);
+    return userRecord;
   };
 
   const register = async (formData: any) => {
@@ -72,8 +75,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       data = await patientApi.register(formData);
     }
 
-    const userRecord =
-      data.user || data.doctor || data.patient || data.admin;
+    const userRecord = data.user || data.doctor || data.patient || data.admin;
+    if (formData.role === 'doctor' && !userRecord.role) userRecord.role = 'doctor';
+    
     if (!userRecord) {
       throw new Error('Registration succeeded but user payload was missing.');
     }

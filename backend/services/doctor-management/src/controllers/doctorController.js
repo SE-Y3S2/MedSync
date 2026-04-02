@@ -51,7 +51,11 @@ exports.registerDoctor = async (req, res) => {
       { expiresIn: '7d' }
     );
     
-    res.status(201).json({ token, doctor });
+    const doctorObj = doctor.toObject();
+    delete doctorObj.password;
+    doctorObj.role = 'doctor';
+    
+    res.status(201).json({ token, doctor: doctorObj });
   } catch (error) {
     res.status(400).json({ message: error.message });
   }
@@ -81,7 +85,11 @@ exports.login = async (req, res) => {
       { expiresIn: '7d' }
     );
 
-    res.status(200).json({ token, doctor });
+    const doctorObj = doctor.toObject();
+    delete doctorObj.password;
+    doctorObj.role = 'doctor';
+
+    res.status(200).json({ token, doctor: doctorObj });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
