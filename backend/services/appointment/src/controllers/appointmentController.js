@@ -276,3 +276,16 @@ exports.getDoctorStats = async (req, res, next) => {
         next(error);
     }
 };
+
+// ── Admin: Get All Appointments ──────────────────────────────────────────────
+exports.getAllAppointments = async (req, res, next) => {
+    try {
+        if (req.user && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Forbidden: Admin access only.' });
+        }
+        const appointments = await Appointment.find().sort({ createdAt: -1 });
+        res.json(appointments);
+    } catch (error) {
+        next(error);
+    }
+};

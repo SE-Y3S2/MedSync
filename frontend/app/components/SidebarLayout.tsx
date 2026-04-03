@@ -15,7 +15,9 @@ const getNavItems = (role?: string) => {
   if (role === 'admin') {
     return [
       { href: '/admin', label: 'Admin Dashboard', icon: <LayoutDashboard size={20} /> },
-      { href: '/admin/doctors', label: 'Manage Doctors', icon: <UserCog size={20} /> }
+      { href: '/admin/doctors', label: 'Manage Doctors', icon: <UserCog size={20} /> },
+      { href: '/admin/appointments', label: 'All Appointments', icon: <Calendar size={20} /> },
+      { href: '/admin/payments', label: 'System Payments', icon: <CreditCard size={20} /> }
     ];
   }
   if (role === 'doctor') {

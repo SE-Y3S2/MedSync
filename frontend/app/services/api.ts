@@ -323,6 +323,11 @@ export const appointmentApi = {
     });
     if (!response.ok) throw new Error('Failed to cancel appointment');
     return response.json();
+  },
+  adminGetAllAppointments: async () => {
+    const response = await fetch(APPOINTMENT_SERVICE_URL, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch all appointments');
+    return response.json();
   }
 };
 
@@ -368,6 +373,11 @@ export const paymentApi = {
       headers: getAuthHeaders()
     });
     if (!response.ok) throw new Error('Failed to fetch payment history');
+    return response.json();
+  },
+  adminGetAllPayments: async () => {
+    const response = await fetch(PAYMENT_SERVICE_URL, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch all system payments');
     return response.json();
   }
 };

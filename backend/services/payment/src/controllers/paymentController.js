@@ -173,3 +173,16 @@ exports.getPatientPaymentHistory = async (req, res, next) => {
         next(error);
     }
 };
+
+// ── Admin: Get All Payments ──────────────────────────────────────────────
+exports.getAllPayments = async (req, res, next) => {
+    try {
+        if (req.user && req.user.role !== 'admin') {
+            return res.status(403).json({ message: 'Forbidden: Admin access only.' });
+        }
+        const payments = await Payment.find().sort({ createdAt: -1 });
+        res.json(payments);
+    } catch (error) {
+        next(error);
+    }
+};

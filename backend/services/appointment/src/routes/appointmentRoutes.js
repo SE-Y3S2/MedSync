@@ -30,6 +30,9 @@ router.get('/:id', auth, ctrl.getAppointment);
 // Book a new appointment (with validation)
 router.post('/', auth, createAppointmentRules, ctrl.createAppointment);
 
+// Admin: Get all appointments across the system
+router.get('/', auth, ctrl.getAllAppointments);
+
 // Doctor accepts/rejects; patient updates status (with validation)
 router.put('/:id/status', auth, updateStatusRules, ctrl.updateStatus);
 
