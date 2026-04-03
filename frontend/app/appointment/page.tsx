@@ -13,8 +13,9 @@ export default function AppointmentListPage() {
     const fetchAppointments = async () => {
         try {
             const patientData = JSON.parse(localStorage.getItem('medsync_user') || '{}');
-            if (patientData.id) {
-                const data = await appointmentApi.getPatientAppointments(patientData.id);
+            const patientId = patientData.id || patientData._id || patientData.patientId;
+            if (patientId) {
+                const data = await appointmentApi.getPatientAppointments(patientId);
                 setAppointments(data);
             }
         } catch (err) {
@@ -31,9 +32,10 @@ export default function AppointmentListPage() {
     const handlePayment = async (appt: any) => {
         try {
             const patientData = JSON.parse(localStorage.getItem('medsync_user') || '{}');
+            const patientId = patientData.id || patientData._id || patientData.patientId;
             const { url } = await paymentApi.createCheckoutSession({
                 appointmentId: appt._id,
-                patientId: patientData.patientId || patientData.id,
+                patientId: patientId,
                 doctorId: appt.doctorId,
                 doctorName: appt.doctorName,
                 amount: appt.consultationFee || 500 // Fallback if missing

@@ -27,7 +27,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const storedUser = localStorage.getItem('medsync_user');
     if (storedToken && storedUser) {
       setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      const parsedUser = JSON.parse(storedUser);
+      // Map _id to id if missing
+      if (parsedUser._id && !parsedUser.id) parsedUser.id = parsedUser._id;
+      // If role is missing and they aren't the super admin, they are a patient (since doctors were successfully assigned 'doctor' previously)
+      if (!parsedUser.role && parsedUser.email !== 'admin@medsync.com') {
+        parsedUser.role = 'patient';
+      }
+      setUser(parsedUser);
     }
     setIsLoading(false);
   }, []);
@@ -57,7 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     
     const userRecord = data.user || data.doctor || data.patient || data.admin;
+    if (userRecord && userRecord._id && !userRecord.id) userRecord.id = userRecord._id;
     if (data.doctor && !userRecord.role) userRecord.role = 'doctor';
+    if (data.patient && !userRecord.role) userRecord.role = 'patient';
     
     authService.setToken(data.token);
     localStorage.setItem('medsync_user', JSON.stringify(userRecord));
@@ -76,7 +85,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const userRecord = data.user || data.doctor || data.patient || data.admin;
-    if (formData.role === 'doctor' && !userRecord.role) userRecord.role = 'doctor';
+    if (userRecord && userRecord._id && !userRecord.id) userRecord.id = userRecord._id;
+    if (data.doctor || formData.role === 'doctor') {
+      if (!userRecord.role) userRecord.role = 'doctor';
+    } else if (data.patient || formData.role === 'patient') {
+      if (!userRecord.role) userRecord.role = 'patient';
+    } else {
+      if (!userRecord.role && data.patient) userRecord.role = 'patient';
+    }
     
     if (!userRecord) {
       throw new Error('Registration succeeded but user payload was missing.');

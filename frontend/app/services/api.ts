@@ -362,5 +362,12 @@ export const paymentApi = {
     });
     if (!response.ok) throw new Error('Failed to create payment session');
     return response.json();
+  },
+  getPatientPayments: async (patientId: string) => {
+    const response = await fetch(`${PAYMENT_SERVICE_URL}/patient/${patientId}`, {
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to fetch payment history');
+    return response.json();
   }
 };
