@@ -96,4 +96,31 @@ exports.deleteNotification = async (req, res) => {
   }
 };
 
+// Notify admin about doctor registration
+exports.notifyAdminDoctorRegistration = async (doctor) => {
+  try {
+    const adminEmail = process.env.ADMIN_EMAIL;
+    const subject = 'New Doctor Registration';
+    const message = `A new doctor has registered: ${doctor.name} (${doctor.contact.email}). Please verify their proof.`;
+
+    await sendEmail(adminEmail, subject, message);
+    console.log(`[NotificationController] Admin notified about doctor registration: ${doctor.name}`);
+  } catch (error) {
+    console.error(`[NotificationController] Error notifying admin:`, error.message);
+  }
+};
+
+// Notify doctor about proof verification status
+exports.notifyDoctorVerification = async (doctor) => {
+  try {
+    const subject = 'Proof Verification Status';
+    const message = `Your proof has been ${doctor.proof.status}.`;
+
+    await sendEmail(doctor.contact.email, subject, message);
+    console.log(`[NotificationController] Doctor notified about verification status: ${doctor.name}`);
+  } catch (error) {
+    console.error(`[NotificationController] Error notifying doctor:`, error.message);
+  }
+};
+
 module.exports = { sendEmail, sendSMS };

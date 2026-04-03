@@ -1,5 +1,8 @@
+<<<<<<< Updated upstream
 version: '3.8'
 
+=======
+>>>>>>> Stashed changes
 services:
   # Kafka & Zookeeper for message streaming
   zookeeper:
@@ -74,20 +77,35 @@ services:
       - kafka
       - mongo
     environment:
+<<<<<<< Updated upstream
       - KAFKA_BROKERS=kafka:9092
       - MONGO_URI=mongodb://admin:password@mongo:27017/patient_db?authSource=admin
+=======
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - MONGO_URI=mongodb+srv://nivakaran:SzCKhxiVfx1qkvJw@cluster0.mionin42.mongodb.net/patient_db?retryWrites=true&w=majority
+>>>>>>> Stashed changes
       - PORT=3001
 
   doctor-management:
     build: ./backend/services/doctor-management
     ports:
+<<<<<<< Updated upstream
       - "3002:3002"
+=======
+      - "${DOCTOR_PORT:-3002}:3002"
+      - "3001:3001"
+>>>>>>> Stashed changes
     depends_on:
       - kafka
       - mongo
     environment:
+<<<<<<< Updated upstream
       - KAFKA_BROKERS=kafka:9092
       - MONGO_URI=mongodb://admin:password@mongo:27017/doctor_db?authSource=admin
+=======
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - MONGO_URI=mongodb+srv://nivakaran:SzCKhxiVfx1qkvJw@cluster0.mionin42.mongodb.net/doctor_db?retryWrites=true&w=majority
+>>>>>>> Stashed changes
       - PORT=3002
 
   appointment:
@@ -98,8 +116,13 @@ services:
       - kafka
       - mongo
     environment:
+<<<<<<< Updated upstream
       - KAFKA_BROKERS=kafka:9092
       - MONGO_URI=mongodb://admin:password@mongo:27017/appointment_db?authSource=admin
+=======
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - MONGO_URI=mongodb+srv://nivakaran:SzCKhxiVfx1qkvJw@cluster0.mionin42.mongodb.net/appointment_db?retryWrites=true&w=majority
+>>>>>>> Stashed changes
       - DOCTOR_SERVICE_URL=http://doctor-management:3002
       - PORT=3003
 
@@ -124,8 +147,16 @@ services:
       - kafka
       - mongo
     environment:
+<<<<<<< Updated upstream
       - KAFKA_BROKERS=kafka:9092
       - MONGO_URI=mongodb://admin:password@mongo:27017/payment_db?authSource=admin
+=======
+      - KAFKA_BROKERS=${KAFKA_BROKERS:-kafka:9092}
+      - MONGO_URI=mongodb+srv://nivakaran:SzCKhxiVfx1qkvJw@cluster0.mionin42.mongodb.net/payment_db?retryWrites=true&w=majority
+      - STRIPE_SECRET_KEY=${STRIPE_SECRET_KEY}
+      - STRIPE_WEBHOOK_SECRET=${STRIPE_WEBHOOK_SECRET}
+      - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
+>>>>>>> Stashed changes
       - PORT=3005
 
   ai-symptom-checker:
