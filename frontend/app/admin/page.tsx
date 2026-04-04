@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import { doctorApi, patientApi } from '../services/api';
-import { ShieldBan, Users, UserCheck, Stethoscope, AlertTriangle, ArrowRight, ShieldCheck, Database, LayoutDashboard } from 'lucide-react';
+import { ShieldBan, Users, UserCheck, Stethoscope, AlertTriangle, ArrowRight, ShieldCheck, Database, LayoutDashboard, Calendar, CreditCard } from 'lucide-react';
 
 export default function AdminDashboard() {
   const { user, isLoading: authLoading } = useAuth();
@@ -104,17 +104,32 @@ export default function AdminDashboard() {
 
         <div className="med-card" style={{ padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
-            <div className="avatar sm" style={{ background: 'var(--accent-light)', color: 'var(--accent)' }}>
-              <Database size={20} />
+            <div className="avatar sm" style={{ background: 'var(--success-light)', color: 'var(--success)' }}>
+              <Calendar size={20} />
             </div>
-            <h3 className="card-title" style={{ margin: 0 }}>System Infrastructure</h3>
+            <h3 className="card-title" style={{ margin: 0 }}>Appointments</h3>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '20px' }}>
-            Monitor microservice health, inspect Kafka event logs, and manage centralized database clusters.
+            System-wide consultation overview. Monitor pending, confirmed, and completed bookings across all providers.
           </p>
-          <button className="med-button secondary" style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'not-allowed', opacity: 0.6 }}>
-            <LayoutDashboard size={18} /> View Health Metrics (SOON)
-          </button>
+          <Link href="/admin/appointments" className="med-button primary" style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px', background: 'var(--turquoise)' }}>
+            <Calendar size={18} /> View All Bookings <ArrowRight size={16} />
+          </Link>
+        </div>
+
+        <div className="med-card" style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '16px', marginBottom: '20px' }}>
+            <div className="avatar sm" style={{ background: 'var(--warning-light)', color: 'var(--warning)' }}>
+              <CreditCard size={20} />
+            </div>
+            <h3 className="card-title" style={{ margin: 0 }}>Payments & Revenue</h3>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '20px' }}>
+            Platform financial logs. Monitor transaction statuses, revenue distribution, and reconciliation of provider fees.
+          </p>
+          <Link href="/admin/payments" className="med-button secondary" style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CreditCard size={18} /> Revenue Dashboard <ArrowRight size={16} />
+          </Link>
         </div>
       </div>
       

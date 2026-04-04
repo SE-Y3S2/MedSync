@@ -8,14 +8,16 @@ import { useAuth } from '../context/AuthContext';
 
 import { 
   Shield, UserCog, Stethoscope, Clock, Calendar, Home, 
-  Search, CalendarClock, User, FileText, Bot, Video, LayoutDashboard 
+  Search, CalendarClock, User, FileText, Bot, Video, LayoutDashboard, CreditCard 
 } from 'lucide-react';
 
 const getNavItems = (role?: string) => {
   if (role === 'admin') {
     return [
       { href: '/admin', label: 'Admin Dashboard', icon: <LayoutDashboard size={20} /> },
-      { href: '/admin/doctors', label: 'Manage Doctors', icon: <UserCog size={20} /> }
+      { href: '/admin/doctors', label: 'Manage Doctors', icon: <UserCog size={20} /> },
+      { href: '/admin/appointments', label: 'All Appointments', icon: <Calendar size={20} /> },
+      { href: '/admin/payments', label: 'System Payments', icon: <CreditCard size={20} /> }
     ];
   }
   if (role === 'doctor') {
@@ -34,6 +36,7 @@ const getNavItems = (role?: string) => {
     { href: '/patient/profile', label: 'My Profile', icon: <User size={20} /> },
     { href: '/patient/records', label: 'Records & Documents', icon: <FileText size={20} /> },
     { href: '/symptom-checker', label: 'AI Symptom Checker', icon: <Bot size={20} /> },
+    { href: '/payment', label: 'Billing & Payments', icon: <CreditCard size={20} /> },
   ];
 };
 

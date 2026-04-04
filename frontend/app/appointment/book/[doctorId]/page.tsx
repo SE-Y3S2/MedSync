@@ -39,14 +39,15 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
         setBooking(true);
         try {
             const patientData = JSON.parse(localStorage.getItem('medsync_user') || '{}');
-            if (!patientData.id) {
+            const patientId = patientData.id || patientData._id || patientData.patientId;
+            if (!patientId) {
                 showToast('Please login to book an appointment', 'error');
                 router.push('/login');
                 return;
             }
 
             await appointmentApi.createAppointment({
-                patientId: patientData.patientId || patientData.id,
+                patientId: patientId,
                 patientName: `${patientData.firstName} ${patientData.lastName}`,
                 patientEmail: patientData.email,
                 doctorId: doctorId,

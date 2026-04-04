@@ -323,6 +323,11 @@ export const appointmentApi = {
     });
     if (!response.ok) throw new Error('Failed to cancel appointment');
     return response.json();
+  },
+  adminGetAllAppointments: async () => {
+    const response = await fetch(APPOINTMENT_SERVICE_URL, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch all appointments');
+    return response.json();
   }
 };
 
@@ -361,6 +366,18 @@ export const paymentApi = {
       body: JSON.stringify(data)
     });
     if (!response.ok) throw new Error('Failed to create payment session');
+    return response.json();
+  },
+  getPatientPayments: async (patientId: string) => {
+    const response = await fetch(`${PAYMENT_SERVICE_URL}/patient/${patientId}`, {
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to fetch payment history');
+    return response.json();
+  },
+  adminGetAllPayments: async () => {
+    const response = await fetch(PAYMENT_SERVICE_URL, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch all system payments');
     return response.json();
   }
 };

@@ -17,4 +17,7 @@ router.get('/patient/:id', auth, ctrl.getPatientPaymentHistory);
 // Payment details for a specific appointment
 router.get('/:appointmentId', auth, ctrl.getPaymentByAppointment);
 
+// Admin: Get all system payments
+router.get('/', auth, ctrl.getAllPayments);
+
 module.exports = router;
