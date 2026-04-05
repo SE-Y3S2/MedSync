@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 
 import { 
   Shield, UserCog, Stethoscope, Clock, Calendar, Home, 
-  Search, CalendarClock, User, FileText, Bot, Video, LayoutDashboard, CreditCard 
+  Search, CalendarClock, User, FileText, Bot, Video, LayoutDashboard, CreditCard, LogOut 
 } from 'lucide-react';
 
 const getNavItems = (role?: string) => {
@@ -156,18 +156,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 <p style={{ marginBottom: '8px' }}>{user.email}</p>
                 <button
                   onClick={logout}
-                  style={{
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    color: '#fff',
-                    padding: '6px 16px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.8rem',
-                    width: '100%'
-                  }}
+                  className="logout-btn"
                 >
-                  Logout
+                  <LogOut size={16} /> Logout
                 </button>
               </div>
             ) : (
