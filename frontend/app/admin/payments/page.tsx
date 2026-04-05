@@ -173,7 +173,7 @@ export default function AdminPaymentsPage() {
                                     </td>
                                     <td style={{ padding: '16px' }}>
                                         <div style={{ fontWeight: 600, color: p.status === 'paid' ? 'var(--success)' : 'inherit' }}>
-                                            {p.currency?.toUpperCase() || 'INR'} {p.amount.toLocaleString()}
+                                            {p.currency?.toUpperCase() || 'LKR'} {p.amount.toLocaleString()}
                                         </div>
                                     </td>
                                     <td style={{ padding: '16px' }}>

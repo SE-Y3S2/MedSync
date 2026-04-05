@@ -62,6 +62,15 @@ exports.createAppointment = async (req, res, next) => {
             return res.status(409).json({ message: 'This slot is already booked.' });
         }
 
+        // Prevent patient double-booking
+        const patientConflict = await Appointment.findOne({
+            patientId, slotDate, slotTime,
+            status: { $in: ['pending', 'confirmed'] },
+        });
+        if (patientConflict) {
+            return res.status(409).json({ message: 'You already have an appointment booked for this time.' });
+        }
+
         const appointment = new Appointment({
             patientId, patientName, patientEmail,
             doctorId, doctorName, specialty,
@@ -170,6 +179,14 @@ exports.updateStatus = async (req, res, next) => {
         const appointment = await Appointment.findById(req.params.id);
         if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
 
+        // Enforce RBAC
+        if (['confirmed', 'rejected'].includes(status) && req.user && req.user.role !== 'admin' && req.user.role !== 'doctor') {
+            return res.status(403).json({ message: 'Forbidden: Only a doctor or admin can confirm or reject.' });
+        }
+        if (status === 'cancelled' && req.user && req.user.role !== 'admin' && req.user.role !== 'doctor' && req.user.id !== appointment.patientId) {
+            return res.status(403).json({ message: 'Forbidden: You cannot cancel this appointment.' });
+        }
+
         // Enforce lifecycle transitions
         const allowed = STATUS_TRANSITIONS[appointment.status] || [];
         if (!allowed.includes(status)) {
@@ -205,10 +222,7 @@ exports.updatePaymentStatus = async (req, res, next) => {
         appointment.paymentStatus = paymentStatus;
         if (paymentId) appointment.paymentId = paymentId;
 
-        // Auto-confirm once paid (if still pending)
-        if (paymentStatus === 'paid' && appointment.status === 'pending') {
-            appointment.status = 'confirmed';
-        }
+        // Removed auto-confirmation logic; appointment remains pending until doctor action.
 
         await appointment.save();
         res.json(appointment);
@@ -224,16 +238,36 @@ exports.cancelAppointment = async (req, res, next) => {
         const appointment = await Appointment.findById(req.params.id);
         if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
 
+        if (req.user && req.user.role !== 'admin' && req.user.role !== 'doctor' && req.user.id !== appointment.patientId) {
+            return res.status(403).json({ message: 'Forbidden: You cannot cancel this appointment.' });
+        }
+
         if (!['pending', 'confirmed'].includes(appointment.status)) {
             return res.status(400).json({
                 message: 'Only pending or confirmed appointments can be cancelled.',
             });
         }
 
+        const wasPaid = appointment.paymentStatus === 'paid';
+
         appointment.status = 'cancelled';
-        appointment.cancelledBy = cancelledBy || 'patient';
+        appointment.cancelledBy = cancelledBy || (req.user && req.user.role ? req.user.role : 'patient');
         if (cancellationReason) appointment.cancellationReason = cancellationReason;
         await appointment.save();
+
+        // Dispatch Event for Refund / Notification
+        await sendEvent('appointment-events', {
+            type: 'APPOINTMENT_CANCELLED',
+            data: {
+                appointmentId: appointment._id,
+                patientId: appointment.patientId,
+                paymentStatus: appointment.paymentStatus,
+                wasPaid,
+                cancelledBy: appointment.cancelledBy,
+                cancellationReason: appointment.cancellationReason
+            }
+        });
+
         res.json({ message: 'Appointment cancelled successfully', appointment });
     } catch (error) {
         next(error);

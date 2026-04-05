@@ -18,7 +18,13 @@ const createAppointmentRules = [
     body('specialty').notEmpty().withMessage('specialty is required'),
     body('slotDate')
         .notEmpty().withMessage('slotDate is required')
-        .matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('slotDate must be YYYY-MM-DD'),
+        .matches(/^\d{4}-\d{2}-\d{2}$/).withMessage('slotDate must be YYYY-MM-DD')
+        .custom((value) => {
+            if (new Date(value) < new Date(new Date().setHours(0,0,0,0))) {
+                throw new Error('Appointment date must be in the future');
+            }
+            return true;
+        }),
     body('slotTime').notEmpty().withMessage('slotTime is required'),
     body('consultationFee')
         .isFloat({ min: 0 }).withMessage('consultationFee must be a non-negative number'),

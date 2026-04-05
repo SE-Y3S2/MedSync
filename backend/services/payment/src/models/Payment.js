@@ -7,7 +7,7 @@ const paymentSchema = new mongoose.Schema(
         doctorId: { type: String, required: true },
         doctorName: { type: String },
         amount: { type: Number, required: true }, // in smallest currency unit (e.g. paise/cents)
-        currency: { type: String, default: 'inr' },
+        currency: { type: String, default: 'lkr' },
 
         // Stripe identifiers
         stripeSessionId: { type: String, unique: true, sparse: true },
