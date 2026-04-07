@@ -223,6 +223,15 @@ export default function TelemedicineSession() {
 
     // 3. Socket event handlers
     socket.emit('join_room', appointmentId);
+    
+    // ICE Candidate Buffer to fix LAN race conditions
+    let iceCandidateQueue: any[] = [];
+    const flushIceQueue = () => {
+      while (iceCandidateQueue.length > 0) {
+        const candidate = iceCandidateQueue.shift();
+        if (candidate) pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error(e));
+      }
+    };
 
     // Originator handles user joining room
     socket.on('user_joined', async () => {
@@ -235,6 +244,7 @@ export default function TelemedicineSession() {
     // Receiver handles offer
     socket.on('webrtc_offer', async (data) => {
       await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      flushIceQueue();
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       socket.emit('webrtc_answer', { roomId: appointmentId, sdp: answer });
@@ -243,12 +253,17 @@ export default function TelemedicineSession() {
     // Originator handles answer
     socket.on('webrtc_answer', async (data) => {
       await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      flushIceQueue();
     });
 
     // Receiver handles ICE candidate
     socket.on('ice_candidate', async (data) => {
       try {
-        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        if (pc.remoteDescription) {
+          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+        } else {
+          iceCandidateQueue.push(data.candidate);
+        }
       } catch (e) {
         console.error('Error adding ICE candidate', e);
       }
