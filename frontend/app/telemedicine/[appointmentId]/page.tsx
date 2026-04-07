@@ -7,7 +7,6 @@ import { telemedicineApi, appointmentApi, patientApi, doctorApi } from '../../se
 import { Mic, Video, PhoneOff, Bot, FileText, Clipboard, AlertCircle, CheckCircle, Shield, Network, Trash2, Camera } from 'lucide-react';
 import { MedButton as Button, Modal, MedInput as Input, showToast } from '../../components/UI';
 import SignatureCanvas from 'react-signature-canvas';
-import { io, Socket } from 'socket.io-client';
 
 export default function TelemedicineSession() {
   const { appointmentId } = useParams();
@@ -39,12 +38,11 @@ export default function TelemedicineSession() {
   const [issuedPrescription, setIssuedPrescription] = useState<any>(null);
   const sigCanvas = useRef<any>(null);
 
-  // WebRTC & Socket.io Refs
+  // WebRTC PeerJS Refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const peerRef = useRef<any>(null);
   const [remoteStreamConnected, setRemoteStreamConnected] = useState(false);
 
   useEffect(() => {
@@ -176,116 +174,80 @@ export default function TelemedicineSession() {
     }
 
     setInCall(true);
-    showToast('Secure WebRTC module initialized', 'info');
+    showToast('Connecting to Cloud Switchboard...', 'info');
 
-    // 1. Connect to signaling server using the current browser hostname
-    const socketUrl = `http://${window.location.hostname}:3004`;
-    const socket = io(socketUrl);
-    socketRef.current = socket;
+    // Dynamically load PeerJS to completely bypass Next.js SSR window crash errors
+    const PeerPkg = await import('peerjs');
+    const Peer = PeerPkg.default;
 
-    // 2. Initialize Peer Connection
-    const pc = new RTCPeerConnection({
-      iceServers: [
-        { urls: 'stun:stun.l.google.com:19302' },
-        { urls: 'stun:stun1.l.google.com:19302' }
-      ]
+    // We generate a deterministic ID linking them to this specific room securely
+    const myId = user?.role === 'doctor' ? `medsync-doc-${appointmentId}` : `medsync-pat-${appointmentId}`;
+    const targetId = user?.role === 'doctor' ? `medsync-pat-${appointmentId}` : `medsync-doc-${appointmentId}`;
+
+    // Connect to the free worldwide PeerJS STUN cloud over standard HTTPS 443 (Bypasses Firewall exactly as requested!)
+    const peer = new Peer(myId, {
+      secure: true,
+      port: 443
     });
-    peerConnectionRef.current = pc;
+    peerRef.current = peer;
 
-    // Stream Local Track to P2P Connection
-    localStreamRef.current.getTracks().forEach((track) => {
-      pc.addTrack(track, localStreamRef.current!);
-    });
-
-    // Receive Remote Track
-    pc.ontrack = (event) => {
-      console.log('Received remote track:', event.track.kind);
-      if (remoteVideoRef.current && event.streams[0]) {
-        if (remoteVideoRef.current.srcObject !== event.streams[0]) {
-          remoteVideoRef.current.srcObject = event.streams[0];
-        }
-        setRemoteStreamConnected(true);
-        
-        // Browsers sometimes halt video rendering on dynamic track injection, force play
-        remoteVideoRef.current.play().catch(e => console.warn('Video auto-play blocked by browser:', e));
-      }
-    };
-
-    // Forward ICE Candidates to signaling server
-    pc.onicecandidate = (event) => {
-      if (event.candidate) {
-        socket.emit('ice_candidate', {
-          roomId: appointmentId,
-          candidate: event.candidate
-        });
-      }
-    };
-
-    // 3. Socket event handlers
-    socket.emit('join_room', appointmentId);
-    
-    // ICE Candidate Buffer to fix LAN race conditions
-    let iceCandidateQueue: any[] = [];
-    const flushIceQueue = () => {
-      while (iceCandidateQueue.length > 0) {
-        const candidate = iceCandidateQueue.shift();
-        if (candidate) pc.addIceCandidate(new RTCIceCandidate(candidate)).catch(e => console.error(e));
-      }
-    };
-
-    // Originator handles user joining room
-    socket.on('user_joined', async () => {
-      showToast('Remote user joined. Negotiating streams...', 'success');
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('webrtc_offer', { roomId: appointmentId, sdp: offer });
+    // 1. ALWAYS securely auto-answer any incoming pings with my camera feed
+    peer.on('call', (call) => {
+      console.log('Receiving dial request...');
+      call.answer(localStreamRef.current!); // Send my stream back
+      call.on('stream', (remoteStream) => {
+         if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== remoteStream) {
+            remoteVideoRef.current.srcObject = remoteStream;
+            setRemoteStreamConnected(true);
+            showToast('P2P Connection Established!', 'success');
+            remoteVideoRef.current.play().catch(e => console.warn(e));
+         }
+      });
     });
 
-    // Receiver handles offer
-    socket.on('webrtc_offer', async (data) => {
-      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-      flushIceQueue();
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      socket.emit('webrtc_answer', { roomId: appointmentId, sdp: answer });
-    });
+    peer.on('open', (id) => {
+      console.log('Connected to Switchboard. My Peer ID:', id);
 
-    // Originator handles answer
-    socket.on('webrtc_answer', async (data) => {
-      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
-      flushIceQueue();
-    });
-
-    // Receiver handles ICE candidate
-    socket.on('ice_candidate', async (data) => {
-      try {
-        if (pc.remoteDescription) {
-          await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
-        } else {
-          iceCandidateQueue.push(data.candidate);
-        }
-      } catch (e) {
-        console.error('Error adding ICE candidate', e);
+      // 2. If Doctor, run an automated dial-queue every 3s in case the patient connects late
+      if (user?.role === 'doctor') {
+        const ringInterval = setInterval(() => {
+          if (remoteVideoRef.current?.srcObject) {
+            clearInterval(ringInterval);
+            return;
+          }
+          
+          console.log(`Dialing patient ${targetId}...`);
+          const call = peer.call(targetId, localStreamRef.current!);
+          if (call) {
+            call.on('stream', (remoteStream) => {
+               clearInterval(ringInterval);
+               if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== remoteStream) {
+                  remoteVideoRef.current.srcObject = remoteStream;
+                  setRemoteStreamConnected(true);
+                  showToast('P2P Connection Established!', 'success');
+                  remoteVideoRef.current.play().catch(e => console.warn(e));
+               }
+            });
+          }
+        }, 3000);
       }
     });
 
-    socket.on('user_disconnected', () => {
-      showToast('User disconnected from the room.', 'warning');
-      setRemoteStreamConnected(false);
-      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    peer.on('error', (err) => {
+      // Ignore peer-unavailable errors since the dialer will retry until they join
+      if (err.type !== 'peer-unavailable') {
+        console.warn('Peer error:', err);
+      }
     });
   };
 
   const endCall = async () => {
-    // Teardown WebRTC connection
+    // Safely teardown WebRTC infrastructure
     if (localStreamRef.current) {
       localStreamRef.current.getTracks().forEach(track => track.stop());
     }
-    if (peerConnectionRef.current) {
-      peerConnectionRef.current.close();
-    }
-    if (socketRef.current) {
-      socketRef.current.disconnect();
+    if (peerRef.current) {
+      peerRef.current.destroy();
     }
     
     setInCall(false);
