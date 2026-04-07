@@ -50,7 +50,7 @@ export default function PaymentHistoryPage() {
                     <div className="stat-value" style={{ color: 'var(--turquoise)' }}>
                         {payments.reduce((acc, p) => p.status === 'paid' ? acc + p.amount : acc, 0).toLocaleString()}
                     </div>
-                    <div className="stat-label">Total Spent (INR)</div>
+                    <div className="stat-label">Total Spent (LKR)</div>
                 </div>
             </div>
 
@@ -87,7 +87,7 @@ export default function PaymentHistoryPage() {
                                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>ID: {payment.appointmentId}</div>
                                         </td>
                                         <td style={{ padding: '16px', fontWeight: 700 }}>
-                                            {payment.currency?.toUpperCase() || 'INR'} {payment.amount}
+                                            {payment.currency?.toUpperCase() || 'LKR'} {payment.amount}
                                         </td>
                                         <td style={{ padding: '16px' }}>
                                             <Badge 
