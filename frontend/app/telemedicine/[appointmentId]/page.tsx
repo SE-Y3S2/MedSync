@@ -167,6 +167,7 @@ export default function TelemedicineSession() {
       localStreamRef.current = stream;
       if (localVideoRef.current) {
         localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch(e => console.warn(e));
       }
     } catch (err) {
       showToast('Camera/Microphone permissions denied or device missing.', 'error');
@@ -198,9 +199,15 @@ export default function TelemedicineSession() {
 
     // Receive Remote Track
     pc.ontrack = (event) => {
+      console.log('Received remote track:', event.track.kind);
       if (remoteVideoRef.current && event.streams[0]) {
-        remoteVideoRef.current.srcObject = event.streams[0];
+        if (remoteVideoRef.current.srcObject !== event.streams[0]) {
+          remoteVideoRef.current.srcObject = event.streams[0];
+        }
         setRemoteStreamConnected(true);
+        
+        // Browsers sometimes halt video rendering on dynamic track injection, force play
+        remoteVideoRef.current.play().catch(e => console.warn('Video auto-play blocked by browser:', e));
       }
     };
 
