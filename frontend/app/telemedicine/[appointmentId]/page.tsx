@@ -9,8 +9,6 @@ import { MedButton as Button, Modal, MedInput as Input, showToast } from '../../
 import SignatureCanvas from 'react-signature-canvas';
 import { io, Socket } from 'socket.io-client';
 
-const SOCKET_URL = process.env.NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL ? process.env.NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL.replace('/api/sessions', '') : 'http://localhost:3004';
-
 export default function TelemedicineSession() {
   const { appointmentId } = useParams();
   const { user, isLoading: authLoading } = useAuth();
@@ -179,8 +177,9 @@ export default function TelemedicineSession() {
     setInCall(true);
     showToast('Secure WebRTC module initialized', 'info');
 
-    // 1. Connect to signaling server
-    const socket = io(SOCKET_URL);
+    // 1. Connect to signaling server using the current browser hostname
+    const socketUrl = `http://${window.location.hostname}:3004`;
+    const socket = io(socketUrl);
     socketRef.current = socket;
 
     // 2. Initialize Peer Connection
