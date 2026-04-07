@@ -4,9 +4,12 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
 import { telemedicineApi, appointmentApi, patientApi, doctorApi } from '../../services/api';
-import { Mic, Video, PhoneOff, Bot, FileText, Clipboard, AlertCircle, CheckCircle, Shield, Network, Trash2 } from 'lucide-react';
+import { Mic, Video, PhoneOff, Bot, FileText, Clipboard, AlertCircle, CheckCircle, Shield, Network, Trash2, Camera } from 'lucide-react';
 import { MedButton as Button, Modal, MedInput as Input, showToast } from '../../components/UI';
 import SignatureCanvas from 'react-signature-canvas';
+import { io, Socket } from 'socket.io-client';
+
+const SOCKET_URL = process.env.NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL ? process.env.NEXT_PUBLIC_TELEMEDICINE_SERVICE_URL.replace('/api/sessions', '') : 'http://localhost:3004';
 
 export default function TelemedicineSession() {
   const { appointmentId } = useParams();
@@ -37,6 +40,14 @@ export default function TelemedicineSession() {
   const [issuedQrCode, setIssuedQrCode] = useState<string | null>(null);
   const [issuedPrescription, setIssuedPrescription] = useState<any>(null);
   const sigCanvas = useRef<any>(null);
+
+  // WebRTC & Socket.io Refs
+  const localVideoRef = useRef<HTMLVideoElement>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement>(null);
+  const localStreamRef = useRef<MediaStream | null>(null);
+  const peerConnectionRef = useRef<RTCPeerConnection | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const [remoteStreamConnected, setRemoteStreamConnected] = useState(false);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -153,11 +164,111 @@ export default function TelemedicineSession() {
   };
 
   const startCall = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStreamRef.current = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+      }
+    } catch (err) {
+      showToast('Camera/Microphone permissions denied or device missing.', 'error');
+      console.error(err);
+      return;
+    }
+
     setInCall(true);
-    showToast('Secure connection established', 'success');
+    showToast('Secure WebRTC module initialized', 'info');
+
+    // 1. Connect to signaling server
+    const socket = io(SOCKET_URL);
+    socketRef.current = socket;
+
+    // 2. Initialize Peer Connection
+    const pc = new RTCPeerConnection({
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    });
+    peerConnectionRef.current = pc;
+
+    // Stream Local Track to P2P Connection
+    localStreamRef.current.getTracks().forEach((track) => {
+      pc.addTrack(track, localStreamRef.current!);
+    });
+
+    // Receive Remote Track
+    pc.ontrack = (event) => {
+      if (remoteVideoRef.current && event.streams[0]) {
+        remoteVideoRef.current.srcObject = event.streams[0];
+        setRemoteStreamConnected(true);
+      }
+    };
+
+    // Forward ICE Candidates to signaling server
+    pc.onicecandidate = (event) => {
+      if (event.candidate) {
+        socket.emit('ice_candidate', {
+          roomId: appointmentId,
+          candidate: event.candidate
+        });
+      }
+    };
+
+    // 3. Socket event handlers
+    socket.emit('join_room', appointmentId);
+
+    // Originator handles user joining room
+    socket.on('user_joined', async () => {
+      showToast('Remote user joined. Negotiating streams...', 'success');
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('webrtc_offer', { roomId: appointmentId, sdp: offer });
+    });
+
+    // Receiver handles offer
+    socket.on('webrtc_offer', async (data) => {
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      socket.emit('webrtc_answer', { roomId: appointmentId, sdp: answer });
+    });
+
+    // Originator handles answer
+    socket.on('webrtc_answer', async (data) => {
+      await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+    });
+
+    // Receiver handles ICE candidate
+    socket.on('ice_candidate', async (data) => {
+      try {
+        await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+      } catch (e) {
+        console.error('Error adding ICE candidate', e);
+      }
+    });
+
+    socket.on('user_disconnected', () => {
+      showToast('User disconnected from the room.', 'warning');
+      setRemoteStreamConnected(false);
+      if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    });
   };
 
   const endCall = async () => {
+    // Teardown WebRTC connection
+    if (localStreamRef.current) {
+      localStreamRef.current.getTracks().forEach(track => track.stop());
+    }
+    if (peerConnectionRef.current) {
+      peerConnectionRef.current.close();
+    }
+    if (socketRef.current) {
+      socketRef.current.disconnect();
+    }
+    
+    setInCall(false);
+    setRemoteStreamConnected(false);
     if (!confirm('Are you sure you want to end this consultation?')) return;
     try {
       await telemedicineApi.endSession(appointmentId as string);
@@ -198,81 +309,96 @@ export default function TelemedicineSession() {
   };
 
   return (
-    <div className="animate-in flex flex-col h-[calc(100vh-130px)] max-h-[900px]">
-      <div className="flex items-center justify-between mb-4">
+    <div className="animate-in" style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 130px)', maxHeight: '900px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
         <div>
-          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">Telemedicine Session</h1>
-          <div className="flex items-center gap-2 mt-1">
-             <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100">
-               <Shield size={10} /> End-to-End Encrypted
+          <h1 className="page-title" style={{ margin: 0, fontSize: '1.8rem' }}>Telemedicine Session</h1>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+             <span className="badge low">
+               <Shield size={12} style={{ marginRight: '4px' }} /> End-to-End Encrypted
              </span>
-             <span className="flex items-center gap-1 text-[10px] uppercase font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100">
-               <Network size={10} /> Optimized Network
+             <span className="badge info">
+               <Network size={12} style={{ marginRight: '4px' }} /> Optimized Network
              </span>
           </div>
         </div>
         {inCall && (
-           <div className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-mono flex items-center gap-3">
-              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+           <div style={{ background: 'var(--primary-dark)', color: 'white', padding: '8px 16px', borderRadius: 'var(--radius-md)', fontFamily: 'monospace', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--error)' }} className="animate-pulse"></span>
               {formatTime(simulatedTime)}
            </div>
         )}
       </div>
       
       {!inCall ? (
-        <div className="flex-1 flex items-center justify-center">
-           <div className="med-card max-w-[500px] w-full text-center border-t-8 border-t-blue-600 shadow-2xl">
-              <div className="w-24 h-24 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center text-4xl mx-auto mb-6 shadow-inner border border-blue-100">
+        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+           <div className="med-card" style={{ maxWidth: '450px', width: '100%', textAlign: 'center', borderTop: '6px solid var(--primary)' }}>
+              <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', margin: '0 auto 24px' }}>
                 🎥
               </div>
-              <h2 className="text-2xl font-bold text-slate-900 mb-2">Ready to connect?</h2>
-              <p className="text-slate-500 mb-8 leading-relaxed">
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '8px' }}>Ready to connect?</h2>
+              <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>
                 Consultation with <strong>{user?.role === 'patient' ? `Dr. ${appointment?.doctorName}` : appointment?.patientName}</strong>. 
                 Ensure your camera and microphone are permitted.
               </p>
-              <div className="space-y-3">
-                 <Button className="primary w-full py-4 text-lg" onClick={startCall}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                 <Button className="primary" style={{ padding: '16px', fontSize: '1.1rem' }} onClick={startCall}>
                    Join Secure Consultation Room
                  </Button>
-                 <Button className="secondary w-full" onClick={() => router.back()}>
+                 <Button className="secondary" onClick={() => router.back()}>
                    Cancel & Go Back
                  </Button>
               </div>
            </div>
         </div>
       ) : (
-        <div className="flex-1 flex gap-6 min-h-0">
+        <div style={{ flex: 1, display: 'flex', gap: '24px', minHeight: 0 }}>
           {/* Main Video Area */}
-          <div className="flex-1 bg-slate-900 rounded-[32px] relative overflow-hidden shadow-2xl flex items-center justify-center group ring-8 ring-slate-100 dark:ring-slate-900/50">
-            {/* Mock Remote Video */}
-            <div className="text-center">
-              <div className="w-32 h-32 rounded-full bg-slate-800 border-4 border-slate-700 mx-auto mb-4 flex items-center justify-center text-4xl shadow-2xl overflow-hidden">
-                {user?.role === 'patient' ? <span className="text-blue-400">👨‍⚕️</span> : <span className="text-emerald-400">👤</span>}
-              </div>
-              <h3 className="text-white text-xl font-bold tracking-wide">
-                 {user?.role === 'patient' ? `Dr. ${appointment?.doctorName}` : appointment?.patientName}
-              </h3>
-              <p className="text-slate-400 text-sm mt-1 animate-pulse">Establishing data streams...</p>
-            </div>
+          <div style={{ flex: 1, background: '#0f172a', borderRadius: 'var(--radius-xl)', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-lg)' }}>
+            {/* Live Remote Video */}
+            <video 
+              ref={remoteVideoRef} 
+              autoPlay 
+              playsInline 
+              style={{ width: '100%', height: '100%', objectFit: 'cover', display: remoteStreamConnected ? 'block' : 'none' }}
+            />
 
-            {/* PIP (Local) */}
-            <div className="absolute top-8 right-8 w-44 md:w-60 aspect-video bg-slate-800 rounded-2xl border-2 border-white/10 shadow-2xl overflow-hidden flex items-center justify-center ring-4 ring-black/20">
-               <div className="text-white/20 text-xs font-mono uppercase tracking-widest">Self View</div>
-               <div className="absolute bottom-2 left-2 px-2 py-0.5 bg-black/40 text-[10px] text-white rounded font-bold backdrop-blur-md">Local API</div>
+            {!remoteStreamConnected && (
+              <div style={{ textAlign: 'center' }}>
+                <div className="avatar lg" style={{ margin: '0 auto 16px', border: '4px solid #334155' }}>
+                  {user?.role === 'patient' ? '👨‍⚕️' : '👤'}
+                </div>
+                <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 700 }}>
+                   Waiting for {user?.role === 'patient' ? `Dr. ${appointment?.doctorName}` : appointment?.patientName} to join...
+                </h3>
+                <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: '4px' }} className="animate-pulse">Monitoring P2P Signaling Server</p>
+              </div>
+            )}
+
+            {/* PIP (Local Video) */}
+            <div style={{ position: 'absolute', top: '24px', right: '24px', width: '200px', aspectRatio: '16/9', background: '#1e293b', borderRadius: 'var(--radius-md)', border: '2px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: 'var(--shadow-md)' }}>
+               <video 
+                 ref={localVideoRef} 
+                 autoPlay 
+                 playsInline 
+                 muted
+                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+               />
+               <div style={{ position: 'absolute', top: '8px', left: '8px', color: 'rgba(255,255,255,0.7)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '1px', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>Self View</div>
             </div>
 
             {/* Floating Controls */}
-            <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex items-center gap-4 px-6 py-4 bg-slate-900/80 backdrop-blur-2xl rounded-[28px] border border-white/10 shadow-2xl transform transition-all group-hover:bottom-10">
-               <button className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all">
+            <div style={{ position: 'absolute', bottom: '32px', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 24px', background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '30px', border: '1px solid rgba(255,255,255,0.1)' }}>
+               <button style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Mic size={20} />
                </button>
-               <button className="w-12 h-12 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-all">
+               <button style={{ width: '48px', height: '48px', borderRadius: '50%', background: 'rgba(255,255,255,0.1)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                   <Video size={20} />
                </button>
-               <div className="w-[1px] h-8 bg-white/10 mx-2"></div>
+               <div style={{ width: '1px', height: '32px', background: 'rgba(255,255,255,0.1)', margin: '0 8px' }}></div>
                <button 
                 onClick={endCall}
-                className="w-14 h-14 rounded-full bg-red-500 hover:bg-red-600 text-white flex items-center justify-center shadow-lg shadow-red-500/30 transition-all hover:scale-110"
+                style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'var(--error)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(220, 38, 38, 0.4)' }}
                >
                   <PhoneOff size={24} />
                </button>
@@ -281,47 +407,50 @@ export default function TelemedicineSession() {
 
           {/* Sidebar / Tools - Only for Doctor */}
           {user?.role === 'doctor' && (
-            <div className="w-[380px] flex flex-col gap-4 min-h-0">
-               <div className="med-card flex-1 !p-0 flex flex-col shadow-xl overflow-hidden">
-                  <div className="flex border-b border-slate-100">
+            <div style={{ width: '380px', display: 'flex', flexDirection: 'column', gap: '16px', minHeight: 0 }}>
+               <div className="med-card" style={{ flex: 1, padding: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', marginBottom: 0 }}>
+                  <div className="tabs-header" style={{ display: 'flex', borderBottom: '1px solid var(--card-border)' }}>
                      <button 
                        onClick={() => setActiveTab('ai')}
-                       className={`flex-1 py-4 text-xs font-extrabold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'ai' ? 'text-blue-600 bg-blue-50/50 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                       className={`tab-button ${activeTab === 'ai' ? 'active' : ''}`}
+                       style={{ flex: 1, padding: '16px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                      >
                        <Bot size={16} /> AI Scribe
                      </button>
                      <button 
                        onClick={() => setActiveTab('records')}
-                       className={`flex-1 py-4 text-xs font-extrabold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'records' ? 'text-blue-600 bg-blue-50/50 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                       className={`tab-button ${activeTab === 'records' ? 'active' : ''}`}
+                       style={{ flex: 1, padding: '16px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                      >
                        <FileText size={16} /> History
                      </button>
                      <button 
                        onClick={() => setActiveTab('prescription')}
-                       className={`flex-1 py-4 text-xs font-extrabold uppercase tracking-widest transition-all flex items-center justify-center gap-2 ${activeTab === 'prescription' ? 'text-blue-600 bg-blue-50/50 border-b-2 border-blue-600' : 'text-slate-400 hover:text-slate-600'}`}
+                       className={`tab-button ${activeTab === 'prescription' ? 'active' : ''}`}
+                       style={{ flex: 1, padding: '16px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                      >
                        <Clipboard size={16} /> Rx
                      </button>
                   </div>
 
-                  <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
                      {activeTab === 'ai' && (
-                        <div className="space-y-4">
-                           <div className="flex items-center justify-between">
-                              <h4 className="text-sm font-bold text-slate-800">Live AI Summarization</h4>
-                              <span className="text-[10px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full animate-pulse">Analysing...</span>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <h4 style={{ fontSize: '0.9rem', fontWeight: 700 }}>Live AI Summarization</h4>
+                              <span className="badge info" style={{ fontSize: '0.7rem' }}>Analysing...</span>
                            </div>
-                           <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 text-sm text-slate-600 italic leading-relaxed">
+                           <div style={{ padding: '16px', background: 'var(--bg-main)', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)', fontSize: '0.9rem', color: 'var(--text-secondary)', fontStyle: 'italic', lineHeight: 1.6 }}>
                               {simulatedTime < 10 ? 'Waiting for patient conversation to start...' : (
                                 <>
-                                  <span className="font-bold text-blue-600 not-italic block mb-1">Detected Symptoms:</span>
+                                  <strong style={{ display: 'block', fontStyle: 'normal', color: 'var(--primary)', marginBottom: '4px' }}>Detected Symptoms:</strong>
                                   "Severe headache specifically in the frontal region. Duration: 2 days. Mentioned sensitivity to light."
                                 </>
                               )}
                            </div>
                            {simulatedTime > 20 && (
-                              <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100/50 text-sm animate-in">
-                                 <strong className="text-amber-700 block mb-1">AI Recommendation:</strong>
+                              <div className="result-card urgency-medium" style={{ opacity: 1, transform: 'none' }}>
+                                 <strong style={{ color: 'var(--warning)', display: 'block', marginBottom: '4px' }}>AI Recommendation:</strong>
                                  Evaluate for acute migraine. Ask about nausea or history of similar episodes.
                               </div>
                            )}
@@ -329,23 +458,23 @@ export default function TelemedicineSession() {
                      )}
 
                      {activeTab === 'records' && (
-                        <div className="space-y-4">
-                           <h4 className="text-sm font-bold text-slate-800">Medical Reports Review</h4>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                           <h4 style={{ fontSize: '0.9rem', fontWeight: 700 }}>Medical Reports Review</h4>
                            {loadingRecords ? (
-                              <div className="py-12 text-center"><div className="loading-spinner sm mx-auto"></div></div>
+                              <div style={{ padding: '40px 0', textAlign: 'center' }}>Loading...</div>
                            ) : patientRecords.length === 0 ? (
-                              <div className="py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                                 <p className="text-xs text-slate-400">No reports available</p>
+                              <div className="empty-state" style={{ padding: '32px 16px' }}>
+                                 <p style={{ fontSize: '0.8rem' }}>No reports available</p>
                               </div>
                            ) : (
-                              <div className="space-y-2">
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                                  {patientRecords.map((r, i) => (
-                                    <div key={i} className="p-3 bg-white border border-slate-100 rounded-xl hover:shadow-sm transition-all flex items-center justify-between group">
-                                       <div className="flex-1 truncate pr-2">
-                                          <div className="text-xs font-bold text-slate-700 truncate">{r.name || 'Report'}</div>
-                                          <div className="text-[10px] text-slate-400">{new Date(r.createdAt).toLocaleDateString()}</div>
+                                    <div key={i} className="doc-item">
+                                       <div>
+                                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>{r.name || 'Report'}</div>
+                                          <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>{new Date(r.createdAt).toLocaleDateString()}</div>
                                        </div>
-                                       <a href={r.url} target="_blank" rel="noreferrer" className="text-[10px] font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">VIEW</a>
+                                       <a href={r.url} target="_blank" rel="noreferrer" style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--primary)', textDecoration: 'none' }}>VIEW</a>
                                     </div>
                                  ))}
                               </div>
@@ -354,24 +483,24 @@ export default function TelemedicineSession() {
                      )}
 
                      {activeTab === 'prescription' && (
-                        <div className="space-y-4">
-                           <div className="flex items-center justify-between">
-                              <h4 className="text-sm font-bold text-slate-800">Issue Prescription</h4>
-                              <Button className="primary sm px-3" onClick={() => setShowPrescriptionModal(true)}>Open Editor</Button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                              <h4 style={{ fontSize: '0.9rem', fontWeight: 700 }}>Issue Prescription</h4>
+                              <Button className="primary sm" onClick={() => setShowPrescriptionModal(true)}>Open Editor</Button>
                            </div>
-                           <p className="text-xs text-slate-500 leading-relaxed">
+                           <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
                               You can issue a digital prescription now. It will be immediately available to the patient after the session ends.
                            </p>
-                           <div className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
-                              <div className="text-[10px] font-extrabold text-blue-600 uppercase mb-1">Status</div>
-                              <div className="text-xs font-medium text-blue-800">Awaiting medical decision...</div>
+                           <div style={{ padding: '16px', background: 'var(--primary-light)', border: '1px solid var(--card-border)', borderRadius: 'var(--radius-md)' }}>
+                              <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '4px' }}>Status</div>
+                              <div style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--primary-dark)' }}>Awaiting medical decision...</div>
                            </div>
                         </div>
                      )}
                   </div>
 
-                  <div className="p-4 bg-slate-50 border-t border-slate-100">
-                     <Button className="secondary w-full !text-xs font-bold py-3" onClick={endCall}>
+                  <div style={{ padding: '16px', background: 'var(--bg-main)', borderTop: '1px solid var(--card-border)' }}>
+                     <Button className="secondary" style={{ width: '100%', fontSize: '0.9rem', fontWeight: 700, padding: '12px' }} onClick={endCall}>
                         Finalize Consultation
                      </Button>
                   </div>
@@ -387,21 +516,21 @@ export default function TelemedicineSession() {
         onClose={() => setShowPrescriptionModal(false)} 
         title="Live Prescription Issuance"
       >
-         <div className="space-y-4">
+         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
            {issuedQrCode ? (
-              <div className="text-center py-6 animate-in">
-                 <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+              <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                 <div style={{ width: '80px', height: '80px', background: 'var(--success-light)', color: 'var(--success)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
                     <CheckCircle size={40} />
                  </div>
-                 <h3 className="text-lg font-bold text-slate-900">Successfully Issued</h3>
-                 <p className="text-sm text-slate-500 mb-6">Verification ID: <span className="font-mono font-bold text-blue-600">{issuedPrescription?.verificationId}</span></p>
+                 <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '8px' }}>Successfully Issued</h3>
+                 <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '24px' }}>Verification ID: <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)' }}>{issuedPrescription?.verificationId}</span></p>
                  
-                 <div className="bg-white p-4 rounded-3xl border-4 border-emerald-50 shadow-xl inline-block mb-6">
-                    <img src={issuedQrCode} alt="Verification QR Code" className="w-48 h-48" />
+                 <div style={{ background: 'white', padding: '16px', borderRadius: 'var(--radius-xl)', border: '4px solid var(--success-light)', display: 'inline-block', boxShadow: 'var(--shadow-lg)', marginBottom: '24px' }}>
+                    <img src={issuedQrCode} alt="Verification QR Code" style={{ width: '180px', height: '180px' }} />
                  </div>
                  
-                 <div className="space-y-2">
-                    <Button className="secondary w-full" onClick={() => {
+                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <Button className="secondary" onClick={() => {
                        setShowPrescriptionModal(false);
                        setIssuedQrCode(null);
                        setActiveTab('ai');
@@ -410,7 +539,7 @@ export default function TelemedicineSession() {
                       href={`/verify/${issuedPrescription?.verificationId}`} 
                       target="_blank" 
                       rel="noreferrer"
-                      className="block text-xs text-blue-600 font-bold hover:underline"
+                      style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 700, textDecoration: 'none' }}
                     >
                       View Public Verification Page
                     </a>
@@ -424,7 +553,7 @@ export default function TelemedicineSession() {
                    onChange={(e) => setPrescriptionData({...prescriptionData, medication: e.target.value})}
                    placeholder="e.g. Sumatriptan"
                  />
-                 <div className="grid grid-cols-2 gap-4">
+                 <div className="grid-2">
                     <Input 
                       label="Dosage" 
                       value={prescriptionData.dosage} 
@@ -439,41 +568,43 @@ export default function TelemedicineSession() {
                     />
                  </div>
                  <div className="med-input-group">
-                   <label className="med-label text-sm font-bold text-slate-700">Clinical Instructions</label>
+                   <label className="med-label">Clinical Instructions</label>
                    <textarea 
-                     className="med-input min-h-[80px]" 
+                     className="med-input" 
                      value={prescriptionData.instructions} 
                      onChange={(e) => setPrescriptionData({...prescriptionData, instructions: e.target.value})}
                      placeholder="Take at the onset of headache..."
+                     style={{ minHeight: '80px' }}
                    />
                  </div>
 
-                 <div className="med-input-group !mt-6 pb-2 border-t border-slate-100 pt-4">
-                    <div className="flex items-center justify-between mb-2">
-                       <label className="med-label text-sm font-bold text-slate-700 !mb-0">Digital Signature <span className="text-red-500">*</span></label>
+                 <div className="med-input-group" style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--card-border)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
+                       <label className="med-label" style={{ marginBottom: 0 }}>Digital Signature <span style={{ color: 'var(--error)' }}>*</span></label>
                        <button 
                          type="button"
                          onClick={() => sigCanvas.current?.clear()} 
-                         className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400 hover:text-red-500 transition-colors"
+                         style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
                        >
                          <Trash2 size={12} /> Clear Signature
                        </button>
                     </div>
-                    <div className="border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 overflow-hidden relative group">
-                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
-                          <span className="font-serif text-3xl text-slate-400 font-bold rotate-[-10deg]">Sign Here</span>
+                    <div style={{ border: '2px dashed var(--card-border)', borderRadius: 'var(--radius-md)', background: '#f8fafc', overflow: 'hidden', position: 'relative' }}>
+                       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', opacity: 0.2 }}>
+                          <span style={{ fontFamily: 'serif', fontSize: '2rem', color: 'var(--text-muted)', fontWeight: 700, transform: 'rotate(-10deg)' }}>Sign Here</span>
                        </div>
                        <SignatureCanvas 
                          ref={sigCanvas}
                          penColor="#1e293b"
-                         canvasProps={{className: 'w-full h-32 relative z-10 cursor-crosshair'}} 
+                         canvasProps={{style: {width: '100%', height: '140px', position: 'relative', zIndex: 10, cursor: 'crosshair'} }} 
                        />
                     </div>
-                    <p className="text-[10px] text-slate-400 mt-2 font-medium">By signing above, you are legally authorizing the issuance of this prescription to the patient.</p>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '8px', fontWeight: 500 }}>By signing above, you are legally authorizing the issuance of this prescription to the patient.</p>
                  </div>
                  
                  <Button 
-                  className="primary w-full py-4 shadow-xl" 
+                  className="primary" 
+                  style={{ width: '100%', padding: '16px', fontSize: '1rem', boxShadow: 'var(--shadow-md)' }} 
                   onClick={handleIssuePrescription}
                   disabled={isIssuing}
                  >
@@ -481,7 +612,7 @@ export default function TelemedicineSession() {
                  </Button>
               </>
            )}
-        </div>
+         </div>
       </Modal>
 
       <style jsx>{`

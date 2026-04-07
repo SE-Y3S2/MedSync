@@ -158,7 +158,7 @@ export default function DoctorAppointments() {
                     >
                       📘 View Medical Reports
                     </button>
-                    {a.meetingLink && (
+                    {a.status === 'confirmed' && (
                        <Link 
                         href={`/telemedicine/${a._id}`}
                         className="text-xs font-bold px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg transition-colors flex items-center gap-1.5"

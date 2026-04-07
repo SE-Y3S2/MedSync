@@ -321,7 +321,7 @@ export const appointmentApi = {
     return response.json();
   },
   getBookedSlots: async (doctorId: string, date: string) => {
-    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/doctor/${doctorId}/booked-slots?date=${date}`, { headers: getAuthHeaders() });
+    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/available-slots/${doctorId}?date=${date}`);
     if (!response.ok) throw new Error('Failed to fetch booked slots');
     return response.json();
   },
