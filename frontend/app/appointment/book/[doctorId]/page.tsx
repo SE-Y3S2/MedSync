@@ -48,9 +48,11 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
                 const booked = await appointmentApi.getBookedSlots(doctorId, date);
                 setBookedSlots(booked);
 
-                // Filter slots by day of week
+                // Filter slots by local day of week to prevent timezone shift bugs
                 const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-                const selectedDay = days[new Date(date).getUTCDay()];
+                const [year, month, day] = date.split('-');
+                const localDate = new Date(Number(year), Number(month) - 1, Number(day));
+                const selectedDay = days[localDate.getDay()];
                 
                 const daySlots = availability
                     .filter(a => a.day === selectedDay)
