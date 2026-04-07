@@ -11,7 +11,7 @@ const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000';
 // Creates a Stripe Checkout session and returns the redirect URL
 exports.createCheckoutSession = async (req, res, next) => {
     try {
-        const { appointmentId, patientId, doctorId, doctorName, amount, currency = 'inr' } =
+        const { appointmentId, patientId, doctorId, doctorName, amount, currency = 'lkr' } =
             req.body;
 
         if (!appointmentId || !patientId || !amount) {
@@ -184,5 +184,24 @@ exports.getAllPayments = async (req, res, next) => {
         res.json(payments);
     } catch (error) {
         next(error);
+    }
+};
+
+// ── Kafka Event Handlers ──────────────────────────────────────────────────
+exports.handleAppointmentCancelledEvent = async (data) => {
+    const { appointmentId, wasPaid } = data;
+    if (wasPaid) {
+        try {
+            const updated = await Payment.findOneAndUpdate(
+                { appointmentId, status: 'paid' },
+                { status: 'refunded' },
+                { new: true }
+            );
+            if (updated) {
+                console.log(`[Payment] Simulated refund processed successfully for appointment ${appointmentId}`);
+            }
+        } catch (err) {
+            console.error(`[Payment] Refund update failed:`, err);
+        }
     }
 };

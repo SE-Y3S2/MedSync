@@ -150,7 +150,7 @@ export default function AdminAppointmentsPage() {
                                             text={appt.paymentStatus?.toUpperCase() || 'UNPAID'} 
                                             variant={appt.paymentStatus === 'paid' ? 'low' : 'high'} 
                                         />
-                                        <div style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: '4px' }}>INR {appt.consultationFee}</div>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 600, marginTop: '4px' }}>LKR {appt.consultationFee}</div>
                                     </td>
                                     <td style={{ padding: '16px', textAlign: 'right' }}>
                                         <button className="med-button sm secondary">View Details</button>
