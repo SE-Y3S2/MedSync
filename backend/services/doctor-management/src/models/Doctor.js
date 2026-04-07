@@ -12,6 +12,14 @@ const doctorSchema = new mongoose.Schema({
   isVerified: { type: Boolean, default: false },
   bio: String,
   photoUrl: String,
+  availability: [
+    {
+      day: { type: String, required: true }, // e.g., "Monday"
+      startTime: { type: String, required: true }, // e.g., "09:00"
+      endTime: { type: String, required: true }, // e.g., "17:00"
+      isBooked: { type: Boolean, default: false }
+    }
+  ],
   analytics: {
     averageConsultationDuration: { type: Number, default: 0 },
     patientSatisfactionScore: { type: Number, default: 0 },

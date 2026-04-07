@@ -4,8 +4,9 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import { doctorApi, appointmentApi } from '../services/api';
-import { Clock, Video, User, List, CheckCircle, AlertCircle } from 'lucide-react';
+import { Clock, Video, User, List, CheckCircle, AlertCircle, BarChart2, TrendingUp } from 'lucide-react';
 import { showToast } from '../components/UI';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 
 export default function DoctorDashboard() {
   const { user, isLoading } = useAuth();
@@ -108,13 +109,123 @@ export default function DoctorDashboard() {
         <div className="med-card !p-6 flex flex-col justify-between border-l-4 border-l-indigo-500 text-indigo-700 font-bold">
            {analytics ? (
               <div className="w-full h-full">
-                <div className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Satisfaction</div>
-                <div className="text-3xl font-bold text-slate-900">{analytics.patientSatisfactionScore}%</div>
+                <div className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Prescribed</div>
+                <div className="text-3xl font-bold text-slate-900">{analytics.totalPrescriptions || 0}</div>
               </div>
            ) : (
               <div className="opacity-50 italic font-normal text-sm">Analytics loading...</div>
            )}
         </div>
+      </div>
+
+      {/* Analytics Visualization Section */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+         <div className="med-card min-h-[400px] flex flex-col">
+            <div className="flex items-center justify-between mb-8">
+               <div>
+                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                     <TrendingUp className="text-blue-500" size={22} /> Performance Trends
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">Activity over the last 7 days</p>
+               </div>
+               <div className="flex gap-4">
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                     <div className="w-2 h-2 rounded-full bg-blue-500"></div> Appointments
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                     <div className="w-2 h-2 rounded-full bg-indigo-400"></div> Prescriptions
+                  </div>
+               </div>
+            </div>
+            
+            <div className="flex-1 mt-auto">
+               {analytics?.prescriptionTrend ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                     <AreaChart data={analytics.prescriptionTrend}>
+                        <defs>
+                           <linearGradient id="colorApp" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
+                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
+                           </linearGradient>
+                           <linearGradient id="colorPres" x1="0" y1="0" x2="0" y2="1">
+                              <stop offset="5%" stopColor="#818cf8" stopOpacity={0.1}/>
+                              <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
+                           </linearGradient>
+                        </defs>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                        <XAxis 
+                          dataKey="date" 
+                          axisLine={false} 
+                          tickLine={false} 
+                          tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} 
+                          dy={10}
+                          tickFormatter={(str) => {
+                             const date = new Date(str);
+                             return date.toLocaleDateString(undefined, { weekday: 'short' });
+                          }}
+                        />
+                        <YAxis hide domain={['auto', 'auto']} />
+                        <Tooltip 
+                           contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                           itemStyle={{ fontWeight: 700, fontSize: '12px' }}
+                           labelStyle={{ color: '#64748b', fontSize: '10px', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 800 }}
+                        />
+                        <Area type="monotone" dataKey="appointments" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorApp)" />
+                        <Area type="monotone" dataKey="prescriptions" stroke="#818cf8" strokeWidth={3} fillOpacity={1} fill="url(#colorPres)" />
+                     </AreaChart>
+                  </ResponsiveContainer>
+               ) : (
+                  <div className="w-full h-full flex items-center justify-center bg-slate-50 rounded-2xl animate-pulse">
+                     <p className="text-slate-400 text-sm">Visualizing performance data...</p>
+                  </div>
+               )}
+            </div>
+         </div>
+
+         <div className="med-card min-h-[400px] flex flex-col">
+            <div className="flex items-center justify-between mb-8">
+               <div>
+                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
+                     <BarChart2 className="text-indigo-500" size={22} /> Reach & Impact
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-1">Pharmacy engagement metrics</p>
+               </div>
+            </div>
+
+            <div className="flex-1 mt-auto">
+                {analytics?.prescriptionTrend ? (
+                   <ResponsiveContainer width="100%" height={280}>
+                      <BarChart data={analytics.prescriptionTrend}>
+                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                         <XAxis 
+                           dataKey="date" 
+                           axisLine={false} 
+                           tickLine={false} 
+                           tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} 
+                           dy={10}
+                           tickFormatter={(str) => {
+                              const date = new Date(str);
+                              return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+                           }}
+                         />
+                         <Tooltip 
+                            cursor={{fill: '#f8fafc', radius: 8}}
+                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
+                         />
+                         <Bar dataKey="prescriptions" radius={[6, 6, 0, 0]} barSize={24}>
+                            {analytics.prescriptionTrend.map((entry: any, index: number) => (
+                               <Cell key={`cell-${index}`} fill={entry.prescriptions > 0 ? '#6366f1' : '#e2e8f0'} />
+                            ))}
+                         </Bar>
+                      </BarChart>
+                   </ResponsiveContainer>
+                ) : (
+                   <div className="w-full h-full flex items-center justify-center bg-slate-50 rounded-2xl">
+                      <p className="text-slate-400 text-sm">Aggregating records...</p>
+                   </div>
+                )}
+            </div>
+         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
