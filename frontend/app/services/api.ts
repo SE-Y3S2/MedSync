@@ -266,6 +266,20 @@ export const doctorApi = {
     const response = await fetch(`${DOCTOR_SERVICE_URL}/${id}/analytics`, { headers: getAuthHeaders() });
     if (!response.ok) throw new Error('Failed to fetch analytics');
     return response.json();
+  },
+  issuePrescription: async (data: any) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/prescriptions`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(data)
+    });
+    if (!response.ok) throw new Error('Failed to issue prescription');
+    return response.json();
+  },
+  verifyPrescription: async (verificationId: string) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/prescriptions/verify/${verificationId}`);
+    if (!response.ok) throw new Error('Prescription not found or invalid');
+    return response.json();
   }
 };
 
@@ -304,6 +318,11 @@ export const appointmentApi = {
   getDoctorAppointments: async (doctorId: string) => {
     const response = await fetch(`${APPOINTMENT_SERVICE_URL}/doctor/${doctorId}`, { headers: getAuthHeaders() });
     if (!response.ok) throw new Error('Failed to fetch doctor appointments');
+    return response.json();
+  },
+  getBookedSlots: async (doctorId: string, date: string) => {
+    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/doctor/${doctorId}/booked-slots?date=${date}`, { headers: getAuthHeaders() });
+    if (!response.ok) throw new Error('Failed to fetch booked slots');
     return response.json();
   },
   updateStatus: async (id: string, data: { status: string; cancelledBy?: string; cancellationReason?: string; notes?: string }) => {

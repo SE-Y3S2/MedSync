@@ -1,11 +1,12 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
-import { telemedicineApi, appointmentApi, patientApi } from '../../services/api';
-import { Mic, Video, PhoneOff, Bot, FileText, Clipboard, AlertCircle, CheckCircle, Shield, Network } from 'lucide-react';
+import { telemedicineApi, appointmentApi, patientApi, doctorApi } from '../../services/api';
+import { Mic, Video, PhoneOff, Bot, FileText, Clipboard, AlertCircle, CheckCircle, Shield, Network, Trash2 } from 'lucide-react';
 import { MedButton as Button, Modal, MedInput as Input, showToast } from '../../components/UI';
+import SignatureCanvas from 'react-signature-canvas';
 
 export default function TelemedicineSession() {
   const { appointmentId } = useParams();
@@ -33,6 +34,9 @@ export default function TelemedicineSession() {
      instructions: ''
   });
   const [isIssuing, setIsIssuing] = useState(false);
+  const [issuedQrCode, setIssuedQrCode] = useState<string | null>(null);
+  const [issuedPrescription, setIssuedPrescription] = useState<any>(null);
+  const sigCanvas = useRef<any>(null);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -108,17 +112,39 @@ export default function TelemedicineSession() {
       showToast('Please fill required fields', 'warning');
       return;
     }
+    
+    if (sigCanvas.current?.isEmpty()) {
+      showToast('Please draw your signature to authorize this prescription', 'warning');
+      return;
+    }
+
     setIsIssuing(true);
     try {
-      await patientApi.doctorIssuePrescription(appointment?.patientId, {
-        ...prescriptionData,
-        prescribedBy: user?.name,
-        date: new Date()
+      const signatureBase64 = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+
+      const result = await doctorApi.issuePrescription({
+        patientId: appointment?.patientId,
+        patientName: appointment?.patientName,
+        doctorName: user?.name,
+        appointmentId: appointmentId as string,
+        medications: [{
+          medication: prescriptionData.medication,
+          dosage: prescriptionData.dosage,
+          frequency: prescriptionData.frequency,
+          duration: prescriptionData.duration
+        }],
+        instructions: prescriptionData.instructions,
+        signatureBase64
       });
-      showToast('Prescription issued!', 'success');
-      setShowPrescriptionModal(false);
+      
+      setIssuedQrCode(result.qrCode);
+      setIssuedPrescription(result.prescription);
+      showToast('Digital Prescription issued securely!', 'success');
+      // We don't close the modal yet to show the QR code
       setPrescriptionData({ medication: '', dosage: '', frequency: '', duration: '', instructions: '' });
-      setActiveTab('ai');
+      if (sigCanvas.current) {
+         sigCanvas.current.clear();
+      }
     } catch (err: any) {
       showToast(err.message || 'Failed to issue prescription', 'error');
     } finally {
@@ -361,43 +387,100 @@ export default function TelemedicineSession() {
         onClose={() => setShowPrescriptionModal(false)} 
         title="Live Prescription Issuance"
       >
-        <div className="space-y-4">
-           <Input 
-             label="Medication" 
-             value={prescriptionData.medication} 
-             onChange={(e) => setPrescriptionData({...prescriptionData, medication: e.target.value})}
-             placeholder="e.g. Sumatriptan"
-           />
-           <div className="grid grid-cols-2 gap-4">
-              <Input 
-                label="Dosage" 
-                value={prescriptionData.dosage} 
-                onChange={(e) => setPrescriptionData({...prescriptionData, dosage: e.target.value})}
-                placeholder="50mg"
-              />
-              <Input 
-                label="Frequency" 
-                value={prescriptionData.frequency} 
-                onChange={(e) => setPrescriptionData({...prescriptionData, frequency: e.target.value})}
-                placeholder="Once daily"
-              />
-           </div>
-           <div className="med-input-group">
-             <label className="med-label text-sm font-bold text-slate-700">Clinical Instructions</label>
-             <textarea 
-               className="med-input min-h-[80px]" 
-               value={prescriptionData.instructions} 
-               onChange={(e) => setPrescriptionData({...prescriptionData, instructions: e.target.value})}
-               placeholder="Take at the onset of headache..."
-             />
-           </div>
-           <Button 
-            className="primary w-full py-4 shadow-xl" 
-            onClick={handleIssuePrescription}
-            disabled={isIssuing}
-           >
-             {isIssuing ? 'Issuing...' : 'Verify & Send to Patient'}
-           </Button>
+         <div className="space-y-4">
+           {issuedQrCode ? (
+              <div className="text-center py-6 animate-in">
+                 <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <CheckCircle size={40} />
+                 </div>
+                 <h3 className="text-lg font-bold text-slate-900">Successfully Issued</h3>
+                 <p className="text-sm text-slate-500 mb-6">Verification ID: <span className="font-mono font-bold text-blue-600">{issuedPrescription?.verificationId}</span></p>
+                 
+                 <div className="bg-white p-4 rounded-3xl border-4 border-emerald-50 shadow-xl inline-block mb-6">
+                    <img src={issuedQrCode} alt="Verification QR Code" className="w-48 h-48" />
+                 </div>
+                 
+                 <div className="space-y-2">
+                    <Button className="secondary w-full" onClick={() => {
+                       setShowPrescriptionModal(false);
+                       setIssuedQrCode(null);
+                       setActiveTab('ai');
+                    }}>Done</Button>
+                    <a 
+                      href={`/verify/${issuedPrescription?.verificationId}`} 
+                      target="_blank" 
+                      rel="noreferrer"
+                      className="block text-xs text-blue-600 font-bold hover:underline"
+                    >
+                      View Public Verification Page
+                    </a>
+                 </div>
+              </div>
+           ) : (
+              <>
+                 <Input 
+                   label="Medication" 
+                   value={prescriptionData.medication} 
+                   onChange={(e) => setPrescriptionData({...prescriptionData, medication: e.target.value})}
+                   placeholder="e.g. Sumatriptan"
+                 />
+                 <div className="grid grid-cols-2 gap-4">
+                    <Input 
+                      label="Dosage" 
+                      value={prescriptionData.dosage} 
+                      onChange={(e) => setPrescriptionData({...prescriptionData, dosage: e.target.value})}
+                      placeholder="50mg"
+                    />
+                    <Input 
+                      label="Frequency" 
+                      value={prescriptionData.frequency} 
+                      onChange={(e) => setPrescriptionData({...prescriptionData, frequency: e.target.value})}
+                      placeholder="Once daily"
+                    />
+                 </div>
+                 <div className="med-input-group">
+                   <label className="med-label text-sm font-bold text-slate-700">Clinical Instructions</label>
+                   <textarea 
+                     className="med-input min-h-[80px]" 
+                     value={prescriptionData.instructions} 
+                     onChange={(e) => setPrescriptionData({...prescriptionData, instructions: e.target.value})}
+                     placeholder="Take at the onset of headache..."
+                   />
+                 </div>
+
+                 <div className="med-input-group !mt-6 pb-2 border-t border-slate-100 pt-4">
+                    <div className="flex items-center justify-between mb-2">
+                       <label className="med-label text-sm font-bold text-slate-700 !mb-0">Digital Signature <span className="text-red-500">*</span></label>
+                       <button 
+                         type="button"
+                         onClick={() => sigCanvas.current?.clear()} 
+                         className="flex items-center gap-1 text-[10px] uppercase font-bold text-slate-400 hover:text-red-500 transition-colors"
+                       >
+                         <Trash2 size={12} /> Clear Signature
+                       </button>
+                    </div>
+                    <div className="border-2 border-dashed border-slate-200 rounded-xl bg-slate-50 overflow-hidden relative group">
+                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none opacity-20">
+                          <span className="font-serif text-3xl text-slate-400 font-bold rotate-[-10deg]">Sign Here</span>
+                       </div>
+                       <SignatureCanvas 
+                         ref={sigCanvas}
+                         penColor="#1e293b"
+                         canvasProps={{className: 'w-full h-32 relative z-10 cursor-crosshair'}} 
+                       />
+                    </div>
+                    <p className="text-[10px] text-slate-400 mt-2 font-medium">By signing above, you are legally authorizing the issuance of this prescription to the patient.</p>
+                 </div>
+                 
+                 <Button 
+                  className="primary w-full py-4 shadow-xl" 
+                  onClick={handleIssuePrescription}
+                  disabled={isIssuing}
+                 >
+                   {isIssuing ? 'Issuing...' : 'Verify & Send to Patient'}
+                 </Button>
+              </>
+           )}
         </div>
       </Modal>
 

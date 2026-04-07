@@ -8,16 +8,17 @@
  */
 
 const jwt = require('jsonwebtoken');
+const JWT_SECRET = process.env.JWT_SECRET;
 
 const auth = (req, res, next) => {
-    // ── STUB MODE: no JWT_SECRET configured ──────────────────────────────
-    if (!process.env.JWT_SECRET) {
-        req.user = { id: 'dev-user', role: 'patient' };
-        return next();
+    const authHeader = req.headers.authorization;
+
+    if (!JWT_SECRET) {
+        console.error('[Payment Service] CRITICAL: JWT_SECRET not found in environment.');
+        return res.status(500).json({ message: 'Internal Server Error: Auth misconfigured' });
     }
 
     // ── PRODUCTION MODE ────────────────────────────────────────────────────
-    const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ message: 'Authorization token required' });
     }

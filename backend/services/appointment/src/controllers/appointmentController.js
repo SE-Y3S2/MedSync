@@ -62,13 +62,34 @@ exports.createAppointment = async (req, res, next) => {
             return res.status(409).json({ message: 'This slot is already booked.' });
         }
 
-        // Prevent patient double-booking
-        const patientConflict = await Appointment.findOne({
-            patientId, slotDate, slotTime,
-            status: { $in: ['pending', 'confirmed'] },
-        });
-        if (patientConflict) {
-            return res.status(409).json({ message: 'You already have an appointment booked for this time.' });
+        // Verify doctor's availability
+        try {
+            const availUrl = `${DOCTOR_SERVICE_URL}/api/doctors/${doctorId}/availability`;
+            console.log(`[Appointment Service] Internal check: ${availUrl}`);
+            const { data: availability } = await axios.get(availUrl, {
+                headers: { Authorization: req.headers.authorization }
+            });
+            
+            const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+            const requestedDate = new Date(slotDate);
+            const requestedDay = days[requestedDate.getUTCDay()];
+
+            console.log(`[Appointment Service] Validation -> Date: ${slotDate}, Day: ${requestedDay}, Slot: ${slotTime}`);
+            console.log(`[Appointment Service] Doctor Availability:`, JSON.stringify(availability));
+            
+            const isAvailable = availability.some(a => 
+                a.day === requestedDay && 
+                `${a.startTime} - ${a.endTime}` === slotTime
+            );
+
+            if (!isAvailable) {
+                console.warn(`[Appointment Service] BLOCKED: Slot ${slotTime} on ${requestedDay} is NOT in doctor ${doctorId} availability.`);
+                return res.status(400).json({ message: 'Invalid slot: Doctor is not available at this time.' });
+            }
+            console.log(`[Appointment Service] SUCCESS: Slot ${slotTime} on ${requestedDay} validated.`);
+        } catch (error) {
+            console.error('[Appointment Service] Availability Check Failed:', error.message);
+            return res.status(502).json({ message: 'Could not verify doctor availability. Please try again later.' });
         }
 
         const appointment = new Appointment({
