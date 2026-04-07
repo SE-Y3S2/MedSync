@@ -4,7 +4,10 @@ const jwt = require('jsonwebtoken');
 
 const app = express();
 const sessions = new Map();
-const JWT_SECRET = process.env.JWT_SECRET || 'medsync-secret-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error('[Telemedicine Service] CRITICAL: JWT_SECRET not found in environment.');
+}
 
 // Middleware
 app.use(cors());

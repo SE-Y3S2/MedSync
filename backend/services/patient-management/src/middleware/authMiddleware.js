@@ -1,6 +1,9 @@
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'medsync-secret-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error('[Patient Management] CRITICAL: JWT_SECRET not found in environment.');
+}
 
 const authMiddleware = (req, res, next) => {
   try {

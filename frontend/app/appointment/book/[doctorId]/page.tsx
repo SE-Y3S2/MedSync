@@ -13,22 +13,61 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
     const [booking, setBooking] = useState(false);
     const [date, setDate] = useState('');
     const [slot, setSlot] = useState('');
+    const [availability, setAvailability] = useState<any[]>([]);
+    const [bookedSlots, setBookedSlots] = useState<any[]>([]);
+    const [slots, setSlots] = useState<string[]>([]);
     const router = useRouter();
 
     useEffect(() => {
-        const fetchDoctor = async () => {
+        const fetchData = async () => {
             try {
-                const data = await doctorApi.getDoctor(doctorId);
-                setDoctor(data);
+                const [docData, availData] = await Promise.all([
+                    doctorApi.getDoctor(doctorId),
+                    doctorApi.getAvailability(doctorId)
+                ]);
+                setDoctor(docData);
+                setAvailability(availData);
             } catch (err) {
-                showToast('Failed to load doctor details', 'error');
+                showToast('Failed to load consultation data', 'error');
                 router.push('/appointment/search');
             } finally {
                 setLoading(false);
             }
         };
-        fetchDoctor();
+        fetchData();
     }, [doctorId, router]);
+
+    useEffect(() => {
+        if (!date || availability.length === 0) {
+            setSlots([]);
+            return;
+        }
+
+        const fetchBooked = async () => {
+            try {
+                const booked = await appointmentApi.getBookedSlots(doctorId, date);
+                setBookedSlots(booked);
+
+                // Filter slots by day of week
+                const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+                const selectedDay = days[new Date(date).getUTCDay()];
+                
+                const daySlots = availability
+                    .filter(a => a.day === selectedDay)
+                    .map(a => `${a.startTime} - ${a.endTime}`);
+                
+                // Filter out already booked slots
+                const bookedTimes = booked.map((b: any) => b.slotTime);
+                const filtered = daySlots.filter(s => !bookedTimes.includes(s));
+                
+                setSlots(filtered);
+            } catch (err) {
+                console.error('Error fetching booked slots:', err);
+                setSlots([]);
+            }
+        };
+        fetchBooked();
+    }, [date, availability, doctorId]);
 
     const handleBooking = async () => {
         if (!date || !slot) {
@@ -70,8 +109,6 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
 
     if (loading) return <Skeleton type="card" />;
 
-    const slots = ['08:00 AM', '09:00 AM', '10:00 AM', '11:00 AM', '02:00 PM', '03:00 PM', '04:00 PM'];
-
     return (
         <div className="animate-in" style={{ maxWidth: '800px', margin: '0 auto' }}>
             <header style={{ marginBottom: '32px' }}>
@@ -106,27 +143,42 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
 
                     <div className="med-input-group">
                         <label className="med-label">Available Slots</label>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
-                            {slots.map(s => (
-                                <button
-                                    key={s}
-                                    onClick={() => setSlot(s)}
-                                    style={{
-                                        padding: '10px',
-                                        borderRadius: '8px',
-                                        border: '1.5px solid',
-                                        borderColor: slot === s ? 'var(--turquoise)' : 'var(--card-border)',
-                                        background: slot === s ? 'var(--accent-light)' : 'white',
-                                        color: slot === s ? 'var(--turquoise)' : 'var(--text-secondary)',
-                                        fontWeight: 600,
-                                        cursor: 'pointer',
-                                        transition: 'all 0.2s'
-                                    }}
-                                >
-                                    {s}
-                                </button>
-                            ))}
-                        </div>
+                        {slots.length > 0 ? (
+                            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+                                {slots.map(s => (
+                                    <button
+                                        key={s}
+                                        type="button"
+                                        onClick={() => setSlot(s)}
+                                        style={{
+                                            padding: '10px',
+                                            borderRadius: '8px',
+                                            border: '1.5px solid',
+                                            borderColor: slot === s ? 'var(--turquoise)' : 'var(--card-border)',
+                                            background: slot === s ? 'var(--accent-light)' : 'white',
+                                            color: slot === s ? 'var(--turquoise)' : 'var(--text-secondary)',
+                                            fontWeight: 600,
+                                            cursor: 'pointer',
+                                            transition: 'all 0.2s'
+                                        }}
+                                    >
+                                        {s}
+                                    </button>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="empty-slots-msg" style={{ 
+                                padding: '16px', 
+                                textAlign: 'center', 
+                                background: 'var(--bg-light)', 
+                                borderRadius: '12px',
+                                color: 'var(--text-secondary)',
+                                fontSize: '0.9rem',
+                                border: '1px dashed var(--card-border)'
+                            }}>
+                                {date ? "No availability slots for this date." : "Please select a date first."}
+                            </div>
+                        )}
                     </div>
 
                     <Button

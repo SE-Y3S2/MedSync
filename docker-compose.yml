@@ -61,9 +61,14 @@ services:
       - MONGO_URI=${MONGO_URI}
       - PORT=3001
       - JWT_SECRET=${JWT_SECRET}
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   doctor-management:
     build: ./backend/services/doctor-management
+    env_file:
+      - .env
     ports:
       - "${DOCTOR_PORT:-3002}:3002"
     depends_on:
@@ -73,6 +78,9 @@ services:
       - MONGO_URI=${MONGO_URI}
       - PORT=3002
       - JWT_SECRET=${JWT_SECRET}
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   appointment:
     build: ./backend/services/appointment
@@ -88,9 +96,14 @@ services:
       - DOCTOR_SERVICE_URL=http://doctor-management:3002
       - PORT=3003
       - JWT_SECRET=${JWT_SECRET}
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   telemedicine:
     build: ./backend/services/telemedicine
+    env_file:
+      - .env
     ports:
       - "${TELEMEDICINE_PORT:-3004}:3004"
     depends_on:
@@ -107,6 +120,8 @@ services:
 
   payment:
     build: ./backend/services/payment
+    env_file:
+      - .env
     ports:
       - "${PAYMENT_PORT:-3005}:3005"
     depends_on:
@@ -119,6 +134,9 @@ services:
       - FRONTEND_URL=${FRONTEND_URL:-http://localhost:3000}
       - PORT=3005
       - JWT_SECRET=${JWT_SECRET}
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   ai-symptom-checker:
     build: ./backend/services/ai-symptom-checker
@@ -134,6 +152,9 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - PORT=3007
       - JWT_SECRET=${JWT_SECRET}
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
 
   frontend:
     build:

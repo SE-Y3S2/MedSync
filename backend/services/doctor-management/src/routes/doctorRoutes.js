@@ -3,7 +3,10 @@ const router = express.Router();
 const doctorController = require('../controllers/doctorController');
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'medsync-secret-key-2026';
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+    console.error('[Doctor Management] CRITICAL: JWT_SECRET not found in environment.');
+}
 
 const auth = (req, res, next) => {
     try {
@@ -21,5 +24,14 @@ router.get('/', doctorController.listDoctors);
 router.get('/:id', doctorController.getDoctor);
 router.put('/:id', auth, doctorController.updateDoctor);
 router.get('/:id/analytics', auth, doctorController.getAnalytics);
+
+// Availability
+router.get('/:id/availability', auth, doctorController.getAvailability);
+router.post('/:id/availability', auth, doctorController.addAvailability);
+router.delete('/:id/availability/:slotId', auth, doctorController.deleteAvailability);
+
+// Prescription Routes
+router.post('/prescriptions', auth, doctorController.issuePrescription);
+router.get('/prescriptions/verify/:verificationId', doctorController.getPrescriptionByVerifyId);
 
 module.exports = router;
