@@ -19,9 +19,20 @@ io.on('connection', (socket) => {
 
   socket.on('join_room', (roomId) => {
     socket.join(roomId);
-    console.log(`[Telemedicine] Socket ${socket.id} joined room ${roomId}`);
     
-    // Broadcast to the other person in the room that someone arrived
+    // Get all other users in the room
+    const clients = io.sockets.adapter.rooms.get(roomId);
+    const numClients = clients ? clients.size : 0;
+    
+    console.log(`[Telemedicine] Socket ${socket.id} joined room ${roomId}. Total: ${numClients}`);
+    
+    // Send back current room state to the joiner
+    socket.emit('room_ready', {
+      isFirst: numClients === 1,
+      others: Array.from(clients || []).filter(id => id !== socket.id)
+    });
+
+    // Broadcast to others that someone arrived
     socket.to(roomId).emit('user_joined', { socketId: socket.id });
   });
 

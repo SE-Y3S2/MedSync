@@ -148,17 +148,23 @@ export default function TelemedicineSession() {
         const sessData = await telemedicineApi.getSession(apptId);
         setSession(sessData);
       } catch (e) {
-        if (!appt) {
+        // Only try to create if we are the doctor or the patient and we have appointment data
+        if (!appt || !user) {
           setSession(null);
           return;
         }
 
-        const sessData = await telemedicineApi.createSession({
-          appointmentId: apptId,
-          doctorId: appt.doctorId,
-          patientId: appt.patientId,
-        });
-        setSession(sessData);
+        try {
+          const sessData = await telemedicineApi.createSession({
+            appointmentId: apptId,
+            doctorId: appt.doctorId,
+            patientId: appt.patientId,
+          });
+          setSession(sessData);
+        } catch (createErr) {
+          console.error('Could not create or join session', createErr);
+          setSession(null);
+        }
       }
       
       // Pre-fetch records if doctor
@@ -349,6 +355,8 @@ export default function TelemedicineSession() {
     setConnectionStatus('Initializing...');
     showToast('Initializing secure link...', 'info');
 
+    const apptId = String(appointmentId);
+
     try {
        const signalingUrl = `${window.location.protocol}//${window.location.hostname}:3004`;
        const socket = io(signalingUrl, { auth: { token: getAuthToken() } });
@@ -378,15 +386,14 @@ export default function TelemedicineSession() {
        };
 
        pc.onicecandidate = ({candidate}) => {
-          if (candidate) socket.emit('ice_candidate', { candidate, roomId: appointmentId });
+          if (candidate) socket.emit('ice_candidate', { candidate, roomId: apptId });
        };
 
-       // The "Impolite" peer will trigger the first offer
        pc.onnegotiationneeded = async () => {
           try {
              makingOffer = true;
              await pc.setLocalDescription();
-             socket.emit('webrtc_offer', { sdp: pc.localDescription, roomId: appointmentId });
+             socket.emit('webrtc_offer', { sdp: pc.localDescription, roomId: apptId });
           } catch (err) {
              console.error('Negotiation error', err);
           } finally {
@@ -396,18 +403,31 @@ export default function TelemedicineSession() {
 
        socket.on('connect', () => {
           setConnectionStatus('Signaling Active');
-          socket.emit('join_room', appointmentId);
+          socket.emit('join_room', apptId);
+       });
+
+       socket.on('room_ready', ({isFirst, others}) => {
+          // If I am NOT the first, I should be polite/receiver initially
+          if (!isFirst) {
+             setIsPolite(true);
+             setConnectionStatus('Role: Receiver (Polite)');
+             console.log('Joined existing room. I am the Polite peer.');
+          } else {
+             setIsPolite(false);
+             setConnectionStatus('Role: Caller (Impolite)');
+             console.log('Room is empty. I am the Impolite peer.');
+          }
        });
        
        socket.on('user_joined', ({socketId}) => {
-          // Deterministic role: smaller ID is polite
+          // Re-evaluate politeness on every join to stay consistent
           const polite = (socket.id || '') < socketId;
           setIsPolite(polite);
           setConnectionStatus(polite ? 'Role: Receiver' : 'Role: Caller');
           console.log(`New peer joined: ${socketId}. My role: ${polite ? 'Polite' : 'Impolite'}`);
        });
 
-       socket.on('webrtc_offer', async ({sdp, sender}) => {
+       socket.on('webrtc_offer', async ({sdp}) => {
           try {
              const offerCollision = (makingOffer || pc.signalingState !== 'stable');
              ignoreOffer = !isPolite && offerCollision;
@@ -419,14 +439,13 @@ export default function TelemedicineSession() {
 
              await pc.setRemoteDescription(new RTCSessionDescription(sdp));
              
-             // Drain ICE queue
              while (iceQueueRef.current.length > 0) {
                 const cand = iceQueueRef.current.shift();
                 if (cand) await pc.addIceCandidate(new RTCIceCandidate(cand));
              }
 
              await pc.setLocalDescription();
-             socket.emit('webrtc_answer', { sdp: pc.localDescription, roomId: appointmentId });
+             socket.emit('webrtc_answer', { sdp: pc.localDescription, roomId: apptId });
           } catch (err) {
              console.error('Offer error', err);
           }
@@ -452,13 +471,12 @@ export default function TelemedicineSession() {
           }
        });
 
-       // SYNC WATCHDOG: If no connection after 10s of both being present, force a re-negotiation
        const watchdog = setInterval(() => {
           if (pc.iceConnectionState === 'new' && socket.connected) {
              console.log('Watchdog: No connection established. Forcing handshake...');
              pc.onnegotiationneeded?.(new Event('negotiationneeded'));
           }
-       }, 10000);
+       }, 5000); // More aggressive 5s watchdog
 
        socket.on('chat_message', (msg) => setMessages(prev => [...prev, msg]));
        socket.on('transcript_data', (data) => { if (user?.role === 'doctor') setTranscript(prev => prev + ' ' + data.text); });
