@@ -20,55 +20,38 @@ io.on('connection', (socket) => {
   socket.on('join_room', (roomId) => {
     socket.join(roomId);
     
-    // Get all other users in the room
     const clients = io.sockets.adapter.rooms.get(roomId);
     const numClients = clients ? clients.size : 0;
+    console.log(`[Telemedicine] ${socket.id} joined ${roomId}. Members: ${numClients}`);
     
-    console.log(`[Telemedicine] Socket ${socket.id} joined room ${roomId}. Total: ${numClients}`);
-    
-    // Send back current room state to the joiner
-    socket.emit('room_ready', {
-      isFirst: numClients === 1,
-      others: Array.from(clients || []).filter(id => id !== socket.id)
-    });
-
-    // Broadcast to others that someone arrived
+    // Broadcast presence so others know to start the 'Pulse'
     socket.to(roomId).emit('user_joined', { socketId: socket.id });
   });
 
-  // Relay a WebRTC Session Description Offer
+  // Aggressive Pulse Relay
+  socket.on('peer_ready', (data) => {
+    socket.to(data.roomId).emit('peer_ready', { socketId: socket.id });
+  });
+
   socket.on('webrtc_offer', (data) => {
-    console.log(`[Telemedicine] Relay offer from ${socket.id} in room ${data.roomId}`);
-    socket.to(data.roomId).emit('webrtc_offer', {
-      sdp: data.sdp,
-      sender: socket.id
-    });
+    console.log(`[Telemedicine] Relay Offer from ${socket.id} in ${data.roomId}`);
+    socket.to(data.roomId).emit('webrtc_offer', { sdp: data.sdp, sender: socket.id });
   });
 
-  // Relay a WebRTC Session Description Answer
   socket.on('webrtc_answer', (data) => {
-    console.log(`[Telemedicine] Relay answer from ${socket.id} in room ${data.roomId}`);
-    socket.to(data.roomId).emit('webrtc_answer', {
-      sdp: data.sdp,
-      sender: socket.id
-    });
+    console.log(`[Telemedicine] Relay Answer from ${socket.id} in ${data.roomId}`);
+    socket.to(data.roomId).emit('webrtc_answer', { sdp: data.sdp, sender: socket.id });
   });
 
-  // Relay ICE Candidates
   socket.on('ice_candidate', (data) => {
-    socket.to(data.roomId).emit('ice_candidate', {
-      candidate: data.candidate,
-      sender: socket.id
-    });
+    socket.to(data.roomId).emit('ice_candidate', { candidate: data.candidate, sender: socket.id });
   });
 
-  // Cleanup
   socket.on('disconnect', () => {
-    console.log(`[Telemedicine] Socket disconnected: ${socket.id}`);
-    socket.broadcast.emit('user_disconnected', socket.id);
+    console.log(`[Telemedicine] Disconnect: ${socket.id}`);
   });
 });
 
 server.listen(port, () => {
-  console.log(`Telemedicine & WebSocket Engine listening on port ${port}`);
+  console.log(`Telemedicine Stack Online: Port ${port}`);
 });
