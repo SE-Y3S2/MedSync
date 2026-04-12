@@ -352,7 +352,7 @@ export const appointmentApi = {
 };
 
 export const telemedicineApi = {
-  createSession: async (data: { appointmentId: string; doctorId: string; patientId: string }) => {
+  createSession: async (data: { appointmentId: string; doctorId: string; patientId: string; signalingUrl?: string }) => {
     const response = await fetch(TELEMEDICINE_SERVICE_URL, {
       method: 'POST',
       headers: getAuthHeaders(),

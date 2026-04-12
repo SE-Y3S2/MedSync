@@ -87,7 +87,38 @@ export default function TelemedicineSession() {
     }
   }, [inCall, localStreamRef.current]);
 
-  // Sync Remote Video (Robust State-Driven Attachment)
+  // Auto-Initialize Media & Start Call (WhatsApp-Style)
+  useEffect(() => {
+    if (!authLoading && user && appointmentId) {
+      const init = async () => {
+          const stream = await initMedia();
+          if (stream) {
+              console.log('MedSync: Media ready, auto-starting session...');
+              startCall(stream); // Pass stream directly for instant start
+          }
+      };
+      init();
+    }
+  }, [authLoading, user, appointmentId]);
+
+  const initMedia = async () => {
+    try {
+      if (localStreamRef.current) return localStreamRef.current;
+      
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      localStreamRef.current = stream;
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = stream;
+        localVideoRef.current.play().catch(e => console.warn(e));
+      }
+      return stream;
+    } catch (err) {
+      showToast('Camera/Microphone access is required for the consultation.', 'warning');
+      console.warn('Media init failed:', err);
+      return null;
+    }
+  };
+
   useEffect(() => {
     if (remoteStream && remoteVideoRef.current) {
        console.log('Syncing Remote Video DOM with State Stream:', remoteStream.id);
@@ -144,7 +175,12 @@ export default function TelemedicineSession() {
         appt = await appointmentApi.getAppointment(apptId);
         setAppointment(appt);
       } catch (e) {
-        appt = null;
+        console.warn('MedSync Discovery: Appointment not found on this local database. Using guest mode.');
+        setAppointment({
+           doctorName: 'Local Doctor',
+           patientName: 'Local Patient',
+           status: 'confirmed'
+        });
       }
 
       try {
@@ -331,18 +367,11 @@ export default function TelemedicineSession() {
     }
   };
 
-  const startCall = async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localStreamRef.current = stream;
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.play().catch(e => console.warn(e));
-      }
-    } catch (err) {
-      showToast('Camera/Microphone permissions denied or device missing.', 'error');
-      console.error(err);
-      return;
+  const startCall = async (existingStream?: MediaStream) => {
+    const stream = existingStream || localStreamRef.current;
+    if (!stream) {
+       console.warn('Cannot start call: Media stream not ready.');
+       return;
     }
 
     setInCall(true);
@@ -353,7 +382,34 @@ export default function TelemedicineSession() {
     const apptId = String(appointmentId);
 
     try {
-       const signalingUrl = `${window.location.protocol}//${window.location.hostname}:3004`;
+       // 1. Determine local signaling URL context
+       const isTunnel = window.location.hostname.includes('ngrok') || window.location.hostname.includes('loca.lt') || window.location.hostname.includes('cloudflare');
+       const defaultLocalUrl = isTunnel 
+          ? `${window.location.protocol}//${window.location.host}` 
+          : `${window.location.protocol}//${window.location.hostname}:3004`;
+
+       // 2. FETCH session metadata from shared Atlas (to find if doctor is already broadcasting an IP)
+       const sessionData = await telemedicineApi.getSession(apptId).catch(() => null);
+       
+       let signalingUrl = defaultLocalUrl;
+
+       // 3. SMART DISCOVERY Logic:
+       // If we are a DOCTOR, we are the 'Host'. We announce our IP to Atlas.
+       // If we are a PATIENT, we read the 'Host' info from Atlas.
+       if (user?.role === 'doctor') {
+          console.log('MedSync Hosting: Advertising our signaling link to Atlas:', defaultLocalUrl);
+          await telemedicineApi.createSession({
+             appointmentId: apptId,
+             doctorId: user.id,
+             patientId: appointment?.patientId || 'unknown',
+             signalingUrl: defaultLocalUrl
+          }).catch(err => console.error('Failed to advertise host IP', err));
+          signalingUrl = defaultLocalUrl;
+       } else if (sessionData?.signalingUrl) {
+          console.log('MedSync Discovery: Connecting to Doctor at:', sessionData.signalingUrl);
+          signalingUrl = sessionData.signalingUrl;
+       }
+          
        setActiveSignalingUrl(signalingUrl);
        const socket = io(signalingUrl, { auth: { token: getAuthToken() }, reconnection: true });
        socketRef.current = socket;
@@ -362,7 +418,19 @@ export default function TelemedicineSession() {
           iceServers: [
              { urls: 'stun:stun.l.google.com:19302' },
              { urls: 'stun:stun1.l.google.com:19302' },
-             { urls: 'stun:stun2.l.google.com:19302' }
+             { urls: 'stun:stun2.l.google.com:19302' },
+             { urls: 'stun:stun.services.mozilla.com' },
+             // Free global TURN servers from OpenRelayProject for cross-network connectivity
+             { 
+               urls: 'turn:openrelay.metered.ca:80', 
+               username: 'openrelayproject', 
+               credential: 'openrelayproject' 
+             },
+             { 
+               urls: 'turn:openrelay.metered.ca:443', 
+               username: 'openrelayproject', 
+               credential: 'openrelayproject' 
+             }
           ] 
        });
        pcRef.current = pc;
@@ -992,39 +1060,21 @@ export default function TelemedicineSession() {
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
       `}</style>
-      {/* Network Health Diagnostics */}
+      {/* Professional Connection Status Indicator */}
       <div style={{
-        position: 'fixed',
-        bottom: '24px',
-        right: '24px',
-        background: 'rgba(15, 23, 42, 0.95)',
-        padding: '16px',
-        borderRadius: '12px',
-        border: '1px solid rgba(255,255,255,0.1)',
-        zIndex: 2000,
-        backdropFilter: 'blur(10px)',
-        minWidth: '220px',
-        boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+        position: 'fixed', bottom: '24px', right: '24px', zIndex: 2000,
+        background: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(12px)',
+        padding: '10px 18px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.1)',
+        display: 'flex', alignItems: 'center', gap: '10px', color: 'white', fontSize: '12px', fontWeight: 600,
+        boxShadow: '0 8px 30px rgba(0,0,0,0.3)', pointerEvents: 'none'
       }}>
-        <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: '#94a3b8', marginBottom: '12px', fontWeight: 800 }}>Signal Diagnostic</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-          <div style={{ fontSize: '9px', fontFamily: 'monospace', color: '#64748b', wordBreak: 'break-all', marginBottom: '4px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '4px' }}>
-             SVR: {activeSignalingUrl}
-             {activeSignalingUrl.includes('localhost') && <div style={{ color: '#f59e0b', marginTop: '2px' }}>⚠️ NOT FOR CROSS-DEVICE</div>}
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: '#e2e8f0' }}>Signaling (3004)</span>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: socketConnected ? '#10b981' : '#ef4444' }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: '#e2e8f0' }}>Remote Peer</span>
-            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: peerFound ? '#10b981' : '#f59e0b' }} />
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ fontSize: '12px', color: '#e2e8f0' }}>Handshake</span>
-            <span style={{ fontSize: '10px', fontWeight: 700, color: iceState === 'connected' ? '#10b981' : '#f59e0b' }}>{iceState.toUpperCase()}</span>
-          </div>
-        </div>
+        <div style={{ 
+          width: '8px', height: '8px', borderRadius: '50%', 
+          background: socketConnected ? '#10b981' : '#f59e0b',
+          boxShadow: socketConnected ? '0 0 12px #10b981' : '0 0 12px #f59e0b'
+        }} />
+        {socketConnected ? 'Secure Line Active' : 'Connecting to Clinic...'}
+        {socketConnected && !peerFound && <span style={{ opacity: 0.6, fontSize: '10px', marginLeft: '6px' }}>• Awaiting Participant</span>}
       </div>
     </div>
   );

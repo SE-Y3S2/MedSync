@@ -1,21 +1,39 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import { useRouter } from 'next/navigation';
-import { Bot, ClipboardList, User, FileText } from 'lucide-react';
+import { Bot, ClipboardList, User, FileText, Video } from 'lucide-react';
+import { appointmentApi } from '../services/api';
 
 export default function PatientDashboard() {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const [activeAppointments, setActiveAppointments] = useState<any[]>([]);
+  const [loadingAppts, setLoadingAppts] = useState(true);
 
   // Protect the route
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isLoading && (!user || user.role !== 'patient')) {
       router.push('/login');
+    } else if (user?.id) {
+       loadActiveAppointments();
     }
   }, [user, isLoading, router]);
+
+  const loadActiveAppointments = async () => {
+     try {
+        const data = await appointmentApi.getPatientAppointments(user!.id);
+        // Only show confirmed appointments
+        const active = data.filter((a: any) => a.status === 'confirmed');
+        setActiveAppointments(active);
+     } catch (err) {
+        console.error('Failed to load appointments', err);
+     } finally {
+        setLoadingAppts(false);
+     }
+  };
 
   if (isLoading || !user) {
     return <div style={{ padding: '40px', textAlign: 'center' }}>Loading your dashboard...</div>;
@@ -23,6 +41,28 @@ export default function PatientDashboard() {
 
   return (
     <div className="animate-in">
+      {/* Active Consultation Alert */}
+      {activeAppointments.length > 0 && (
+         <div style={{ background: '#f0f9ff', border: '1px solid #bae6fd', padding: '20px', borderRadius: '16px', marginBottom: '24px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', boxShadow: '0 4px 12px rgba(14, 165, 233, 0.1)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+               <div className="animate-pulse" style={{ width: '40px', height: '40px', borderRadius: '50%', background: '#0ea5e9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'white' }}>
+                  <Video size={20} />
+               </div>
+               <div>
+                  <div style={{ fontWeight: 700, color: '#0369a1' }}>Active Consultation Ready</div>
+                  <div style={{ fontSize: '0.85rem', color: '#0ea5e9' }}>You have a session with Dr. {activeAppointments[0].doctorName}</div>
+               </div>
+            </div>
+            <Link 
+               href={`/telemedicine/${activeAppointments[0]._id}`}
+               className="med-button" 
+               style={{ background: '#0ea5e9', color: 'white', padding: '10px 20px', borderRadius: '10px', textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem' }}
+            >
+               Join Virtual Clinic
+            </Link>
+         </div>
+      )}
+
       {/* Hero */}
       <div className="hero" style={{ background: 'linear-gradient(135deg, #0ea5e9, #0284c7)', color: 'white', padding: '40px', borderRadius: '24px', marginBottom: '32px' }}>
         <h1 style={{ fontSize: '2.5rem', fontWeight: 800, marginBottom: '16px' }}>
