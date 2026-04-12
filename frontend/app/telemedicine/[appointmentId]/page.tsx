@@ -60,6 +60,7 @@ export default function TelemedicineSession() {
   const [isPolite, setIsPolite] = useState(false); // Master/Slave role for WebRTC handshake
   const [socketConnected, setSocketConnected] = useState(false);
   const [peerFound, setPeerFound] = useState(false);
+  const [activeSignalingUrl, setActiveSignalingUrl] = useState('');
 
   // Transcription & Chat State
   const [messages, setMessages] = useState<any[]>([]);
@@ -353,6 +354,7 @@ export default function TelemedicineSession() {
 
     try {
        const signalingUrl = `${window.location.protocol}//${window.location.hostname}:3004`;
+       setActiveSignalingUrl(signalingUrl);
        const socket = io(signalingUrl, { auth: { token: getAuthToken() }, reconnection: true });
        socketRef.current = socket;
 
@@ -422,7 +424,7 @@ export default function TelemedicineSession() {
        };
 
        pc.onnegotiationneeded = async () => {
-          if (isPolite) return; 
+          if (isPolite || !peerFound) return; 
           try {
              makingOffer = true;
              await pc.setLocalDescription();
@@ -1006,6 +1008,10 @@ export default function TelemedicineSession() {
       }}>
         <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: '#94a3b8', marginBottom: '12px', fontWeight: 800 }}>Signal Diagnostic</div>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ fontSize: '9px', fontFamily: 'monospace', color: '#64748b', wordBreak: 'break-all', marginBottom: '4px', background: 'rgba(0,0,0,0.2)', padding: '4px', borderRadius: '4px' }}>
+             SVR: {activeSignalingUrl}
+             {activeSignalingUrl.includes('localhost') && <div style={{ color: '#f59e0b', marginTop: '2px' }}>⚠️ NOT FOR CROSS-DEVICE</div>}
+          </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ fontSize: '12px', color: '#e2e8f0' }}>Signaling (3004)</span>
             <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: socketConnected ? '#10b981' : '#ef4444' }} />

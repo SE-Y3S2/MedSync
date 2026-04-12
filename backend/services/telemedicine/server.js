@@ -6,6 +6,20 @@ const port = process.env.PORT || 3004;
 
 const server = http.createServer(app);
 
+// Helper to get local IP address for cross-device testing
+const getLocalIp = () => {
+  const os = require('os');
+  const networks = os.networkInterfaces();
+  for (const name of Object.keys(networks)) {
+    for (const net of networks[name]) {
+      if (net.family === 'IPv4' && !net.internal) {
+        return net.address;
+      }
+    }
+  }
+  return 'localhost';
+};
+
 // Setup Socket.io Signaling
 const io = new Server(server, {
   cors: {
@@ -63,5 +77,7 @@ setInterval(() => {
 }, 5000);
 
 server.listen(port, () => {
-  console.log(`Telemedicine Stack Online: Port ${port}`);
+  console.log(`\n🚀 Telemedicine Signaling Service Online`);
+  console.log(`📍 Local:   http://localhost:${port}`);
+  console.log(`📡 Network: http://${getLocalIp()}:${port}\n`);
 });
