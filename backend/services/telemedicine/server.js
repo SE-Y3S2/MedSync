@@ -17,32 +17,33 @@ const io = new Server(server, {
 io.on('connection', (socket) => {
   console.log(`[Telemedicine] Socket connected: ${socket.id}`);
 
-  // When a user selects a consultation room to enter
   socket.on('join_room', (roomId) => {
     socket.join(roomId);
     console.log(`[Telemedicine] Socket ${socket.id} joined room ${roomId}`);
     
     // Broadcast to the other person in the room that someone arrived
-    socket.to(roomId).emit('user_joined', socket.id);
+    socket.to(roomId).emit('user_joined', { socketId: socket.id });
   });
 
-  // Relay a WebRTC Session Description Offer (Video caller init)
+  // Relay a WebRTC Session Description Offer
   socket.on('webrtc_offer', (data) => {
+    console.log(`[Telemedicine] Relay offer from ${socket.id} in room ${data.roomId}`);
     socket.to(data.roomId).emit('webrtc_offer', {
       sdp: data.sdp,
       sender: socket.id
     });
   });
 
-  // Relay a WebRTC Session Description Answer (Video caller accept)
+  // Relay a WebRTC Session Description Answer
   socket.on('webrtc_answer', (data) => {
+    console.log(`[Telemedicine] Relay answer from ${socket.id} in room ${data.roomId}`);
     socket.to(data.roomId).emit('webrtc_answer', {
       sdp: data.sdp,
       sender: socket.id
     });
   });
 
-  // Relay Network traversal coordinates (ICE Candidates)
+  // Relay ICE Candidates
   socket.on('ice_candidate', (data) => {
     socket.to(data.roomId).emit('ice_candidate', {
       candidate: data.candidate,
@@ -50,7 +51,7 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Cleanup when a client unexpectedly drops
+  // Cleanup
   socket.on('disconnect', () => {
     console.log(`[Telemedicine] Socket disconnected: ${socket.id}`);
     socket.broadcast.emit('user_disconnected', socket.id);
