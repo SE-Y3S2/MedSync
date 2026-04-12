@@ -58,6 +58,8 @@ export default function TelemedicineSession() {
   const [remoteStreamConnected, setRemoteStreamConnected] = useState(false);
   const [iceState, setIceState] = useState<string>('new');
   const [isPolite, setIsPolite] = useState(false); // Master/Slave role for WebRTC handshake
+  const [socketConnected, setSocketConnected] = useState(false);
+  const [peerFound, setPeerFound] = useState(false);
 
   // Transcription & Chat State
   const [messages, setMessages] = useState<any[]>([]);
@@ -344,13 +346,14 @@ export default function TelemedicineSession() {
 
     setInCall(true);
     setConnectionStatus('Searching for peer...');
+    setPeerFound(false);
     showToast('Initializing secure link...', 'info');
 
     const apptId = String(appointmentId);
 
     try {
        const signalingUrl = `${window.location.protocol}//${window.location.hostname}:3004`;
-       const socket = io(signalingUrl, { auth: { token: getAuthToken() } });
+       const socket = io(signalingUrl, { auth: { token: getAuthToken() }, reconnection: true });
        socketRef.current = socket;
 
        const pc = new RTCPeerConnection({ 
@@ -370,14 +373,14 @@ export default function TelemedicineSession() {
        let ignoreOffer = false;
        let peerId: string | null = null;
 
-       // LISTENERS FIRST
        socket.on('peer_ready', ({socketId}) => {
           if (!peerId) {
              peerId = socketId;
-             const polite = (socket.id || '') > socketId; // Alphabetically higher is polite
+             setPeerFound(true);
+             const polite = (socket.id || '') > socketId; 
              setIsPolite(polite);
              setConnectionStatus(polite ? 'Role: Receiver' : 'Role: Caller');
-             console.log(`Peer located: ${socketId}. My role: ${polite ? 'Receiver' : 'Caller'}`);
+             console.log(`Peer ID located: ${socketId}`);
           }
        });
 
@@ -394,26 +397,24 @@ export default function TelemedicineSession() {
              }
              await pc.setLocalDescription();
              socket.emit('webrtc_answer', { sdp: pc.localDescription, roomId: apptId });
-          } catch (err) { console.error('Offer error', err); }
+          } catch (err) { console.error('Offer relay error', err); }
        });
 
        socket.on('webrtc_answer', async ({sdp}) => {
-          try { await pc.setRemoteDescription(new RTCSessionDescription(sdp)); } catch (err) { console.error('Answer error', err); }
+          try { await pc.setRemoteDescription(new RTCSessionDescription(sdp)); } catch (err) { console.error('Answer relay error', err); }
        });
 
        socket.on('ice_candidate', async ({candidate}) => {
           try {
              if (pc.remoteDescription) { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } 
              else { iceQueueRef.current.push(candidate); }
-          } catch (err) { if (!ignoreOffer) console.warn('ICE error', err); }
+          } catch (err) { if (!ignoreOffer) console.warn('ICE relay error', err); }
        });
 
-       // PC CALLBACKS
        pc.oniceconnectionstatechange = () => {
-          const state = pc.iceConnectionState;
-          setIceState(state);
-          setConnectionStatus(`Network: ${state}`);
-          if (state === 'connected') setRemoteStreamConnected(true);
+          setIceState(pc.iceConnectionState);
+          setConnectionStatus(`Network: ${pc.iceConnectionState}`);
+          if (pc.iceConnectionState === 'connected') setRemoteStreamConnected(true);
        };
 
        pc.onicecandidate = ({candidate}) => {
@@ -421,7 +422,7 @@ export default function TelemedicineSession() {
        };
 
        pc.onnegotiationneeded = async () => {
-          if (isPolite) return; // Only impolite peer triggers negotiation
+          if (isPolite) return; 
           try {
              makingOffer = true;
              await pc.setLocalDescription();
@@ -430,27 +431,26 @@ export default function TelemedicineSession() {
           finally { makingOffer = false; }
        };
 
-       // CONNECT AND PULSE
        socket.on('connect', () => {
-          console.log('Signaling Connected as:', socket.id);
+          setSocketConnected(true);
           socket.emit('join_room', apptId);
        });
 
+       socket.on('disconnect', () => setSocketConnected(false));
+
        socket.on('user_joined', () => {
-          console.log('A new peer joined the room. Pulsing READY...');
           socket.emit('peer_ready', { roomId: apptId });
        });
 
-       // THE AGGRESSIVE PULSE LOOP
+       // THE PULSE SHIELD (1s Interval)
        const pulseInterval = setInterval(() => {
           if (socket.connected && pc.iceConnectionState !== 'connected') {
              socket.emit('peer_ready', { roomId: apptId });
              if (peerId && !isPolite && pc.signalingState === 'stable') {
-                console.log('Pulse: Forcing re-negotiation...');
                 pc.onnegotiationneeded?.(new Event('negotiationneeded'));
              }
           }
-       }, 3000);
+       }, 1000);
 
        socket.on('chat_message', (msg) => setMessages(prev => [...prev, msg]));
        socket.on('transcript_data', (data) => { if (user?.role === 'doctor') setTranscript(prev => prev + ' ' + data.text); });
@@ -461,11 +461,30 @@ export default function TelemedicineSession() {
        });
 
        startSpeechRecognition();
-       return () => clearInterval(pulseInterval);
+       return () => {
+          clearInterval(pulseInterval);
+          socket.disconnect();
+       };
     } catch (err) {
        console.error('Signaling Error:', err);
-       setConnectionStatus('System Failure');
     }
+  };
+
+  const resetHandshake = () => {
+      setConnectionStatus('Resetting Handshake...');
+      if (pcRef.current) {
+          pcRef.current.close();
+          const pc = new RTCPeerConnection({ 
+              iceServers: [
+                  { urls: 'stun:stun.l.google.com:19302' },
+                  { urls: 'stun:stun1.l.google.com:19302' }
+              ] 
+          });
+          pcRef.current = pc;
+          localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
+          setupCallHandlers(pc);
+          startCall(); 
+      }
   };
 
   const endCall = async () => {
@@ -793,9 +812,16 @@ export default function TelemedicineSession() {
                      )}
                   </div>
 
-                  <div style={{ padding: '16px', background: 'var(--bg-main)', borderTop: '1px solid var(--card-border)' }}>
-                     <Button className="secondary" style={{ width: '100%', fontSize: '0.9rem', fontWeight: 700, padding: '12px' }} onClick={endCall}>
-                        Finalize Consultation
+                  <div style={{ padding: '16px', background: 'var(--bg-main)', borderTop: '1px solid var(--card-border)', display: 'flex', gap: '12px' }}>
+                     <Button className="secondary" style={{ flex: 1, fontSize: '0.9rem', fontWeight: 700, padding: '12px' }} onClick={endCall}>
+                        Finalize
+                     </Button>
+                     <Button 
+                        variant="secondary" 
+                        style={{ flex: 1, fontSize: '0.9rem', fontWeight: 700, padding: '12px', border: '1px solid var(--error)', color: 'var(--error)', background: 'transparent' }} 
+                        onClick={resetHandshake}
+                     >
+                        Reset Link
                      </Button>
                   </div>
                </div>
@@ -964,6 +990,36 @@ export default function TelemedicineSession() {
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
       `}</style>
+      {/* Network Health Diagnostics */}
+      <div style={{
+        position: 'fixed',
+        bottom: '24px',
+        right: '24px',
+        background: 'rgba(15, 23, 42, 0.95)',
+        padding: '16px',
+        borderRadius: '12px',
+        border: '1px solid rgba(255,255,255,0.1)',
+        zIndex: 2000,
+        backdropFilter: 'blur(10px)',
+        minWidth: '220px',
+        boxShadow: '0 8px 32px rgba(0,0,0,0.5)'
+      }}>
+        <div style={{ fontSize: '10px', textTransform: 'uppercase', letterSpacing: '1px', color: '#94a3b8', marginBottom: '12px', fontWeight: 800 }}>Signal Diagnostic</div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: '#e2e8f0' }}>Signaling (3004)</span>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: socketConnected ? '#10b981' : '#ef4444' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: '#e2e8f0' }}>Remote Peer</span>
+            <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: peerFound ? '#10b981' : '#f59e0b' }} />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ fontSize: '12px', color: '#e2e8f0' }}>Handshake</span>
+            <span style={{ fontSize: '10px', fontWeight: 700, color: iceState === 'connected' ? '#10b981' : '#f59e0b' }}>{iceState.toUpperCase()}</span>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
