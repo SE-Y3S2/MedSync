@@ -46,21 +46,10 @@ export default function TelemedicineSession() {
   const [issuedPrescription, setIssuedPrescription] = useState<any>(null);
   const sigCanvas = useRef<any>(null);
 
-  // WebRTC & Signaling Refs
-  const localVideoRef = useRef<HTMLVideoElement>(null);
-  const remoteVideoRef = useRef<HTMLVideoElement>(null);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const pcRef = useRef<RTCPeerConnection | null>(null);
-  const socketRef = useRef<Socket | null>(null);
-  const recognitionRef = useRef<any>(null);
-
-  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
-  const [remoteStreamConnected, setRemoteStreamConnected] = useState(false);
-  const [iceState, setIceState] = useState<string>('new');
-  const [isPolite, setIsPolite] = useState(false); // Master/Slave role for WebRTC handshake
-  const [socketConnected, setSocketConnected] = useState(false);
-  const [peerFound, setPeerFound] = useState(false);
-  const [activeSignalingUrl, setActiveSignalingUrl] = useState('');
+  // Jitsi Meet State
+  const jitsiContainerRef = useRef<HTMLDivElement>(null);
+  const [jitsiApi, setJitsiApi] = useState<any>(null);
+  const [jitsiLoaded, setJitsiLoaded] = useState(false);
 
   // Transcription & Chat State
   const [messages, setMessages] = useState<any[]>([]);
@@ -75,63 +64,73 @@ export default function TelemedicineSession() {
   const [micEnabled, setMicEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
 
-  // Robustness & Diagnostics State
-  const [connectionStatus, setConnectionStatus] = useState<string>('Ready');
-  const iceQueueRef = useRef<RTCIceCandidateInit[]>([]);
-
-  // Sync Local Video Ref when coming in/out of call (Ensures 100% Visibility)
+  // Load Jitsi External API Script Dynamically
   useEffect(() => {
-    if (inCall && localVideoRef.current && localStreamRef.current) {
-      localVideoRef.current.srcObject = localStreamRef.current;
-      localVideoRef.current.play().catch(e => console.warn('Self-view play blocked', e));
-    }
-  }, [inCall, localStreamRef.current]);
-
-  // Auto-Initialize Media & Start Call (WhatsApp-Style)
-  useEffect(() => {
-    if (!authLoading && user && appointmentId) {
-      const init = async () => {
-          const stream = await initMedia();
-          if (stream) {
-              console.log('MedSync: Media ready, auto-starting session...');
-              startCall(stream); // Pass stream directly for instant start
-          }
-      };
-      init();
-    }
-  }, [authLoading, user, appointmentId]);
-
-  const initMedia = async () => {
-    try {
-      if (localStreamRef.current) return localStreamRef.current;
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      localStreamRef.current = stream;
-      if (localVideoRef.current) {
-        localVideoRef.current.srcObject = stream;
-        localVideoRef.current.play().catch(e => console.warn(e));
+    const script = document.createElement('script');
+    script.src = 'https://meet.jit.si/external_api.js';
+    script.async = true;
+    script.onload = () => {
+      console.log('MedSync: Jitsi Meet Infrastructure Loaded');
+      setJitsiLoaded(true);
+    };
+    document.body.appendChild(script);
+    return () => {
+      if (document.body.contains(script)) {
+        document.body.removeChild(script);
       }
-      return stream;
-    } catch (err) {
-      showToast('Camera/Microphone access is required for the consultation.', 'warning');
-      console.warn('Media init failed:', err);
-      return null;
-    }
-  };
+    };
+  }, []);
 
+  // Initialize Jitsi Meeting
   useEffect(() => {
-    if (remoteStream && remoteVideoRef.current) {
-       console.log('Syncing Remote Video DOM with State Stream:', remoteStream.id);
-       remoteVideoRef.current.srcObject = remoteStream;
-       remoteVideoRef.current.play().catch(e => {
-          console.warn('Remote playback blocked. Attempting muted autoplay fallback...', e);
-          if (remoteVideoRef.current) {
-             remoteVideoRef.current.muted = true;
-             remoteVideoRef.current.play().catch(p => console.error('Full playback failure', p));
+    if (jitsiLoaded && jitsiContainerRef.current && appointment && user) {
+       console.log('MedSync: Establishing secure global consultation bridge...');
+       
+       const options = {
+          roomName: `MedSync-Consult-${appointmentId}`,
+          width: '100%',
+          height: '100%',
+          parentNode: jitsiContainerRef.current,
+          userInfo: {
+             displayName: user.role === 'doctor' ? `Dr. ${user.name}` : user.name,
+             email: user.email
+          },
+          configOverwrite: {
+             startWithAudioMuted: false,
+             startWithVideoMuted: false,
+             enableWelcomePage: false,
+             prejoinPageEnabled: false,
+             disableDeepLinking: true
+          },
+          interfaceConfigOverwrite: {
+             TOOLBAR_BUTTONS: [
+                'microphone', 'camera', 'closedcaptions', 'desktop', 'fullscreen',
+                'fodeviceselection', 'hangup', 'profile', 'chat', 'recording',
+                'livestreaming', 'etherpad', 'sharedvideo', 'settings', 'raisehand',
+                'videoquality', 'filmstrip', 'invite', 'feedback', 'stats', 'shortcuts',
+                'tileview', 'videobackgroundblur', 'download', 'help', 'mute-everyone',
+                'security'
+             ],
+             SETTINGS_SECTIONS: ['devices', 'language', 'moderator', 'profile', 'calendar'],
+             SHOW_JITSI_WATERMARK: false,
+             SHOW_WATERMARK_FOR_GUESTS: false,
           }
-       });
+       };
+
+       const api = new (window as any).JitsiMeetExternalAPI('meet.jit.si', options);
+       setJitsiApi(api);
+       setInCall(true);
+
+       // Auto-start AI Scribe if doctor
+       if (user.role === 'doctor') {
+          startSpeechRecognition();
+       }
+
+       return () => {
+          api.dispose();
+       };
     }
-  }, [remoteStream, remoteVideoRef.current]);
+  }, [jitsiLoaded, appointment, user, appointmentId]);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -168,58 +167,47 @@ export default function TelemedicineSession() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const apptId = appointmentId as string;
-
-      let appt: any = null;
-      try {
-        appt = await appointmentApi.getAppointment(apptId);
-        setAppointment(appt);
-      } catch (e) {
-        console.warn('MedSync Discovery: Appointment not found on this local database. Using guest mode.');
-        setAppointment({
-           doctorName: 'Local Doctor',
-           patientName: 'Local Patient',
-           status: 'confirmed'
-        });
-      }
-
-      try {
-        const sessData = await telemedicineApi.getSession(apptId);
-        setSession(sessData);
-      } catch (e) {
-        console.warn('Backend Session not found, using Local Discovery mode.');
-        // Fail-safe: Use dummy session if backend is lagging
-        setSession({
-           appointmentId: apptId,
-           doctorId: appt?.doctorId || 'local-dr',
-           patientId: appt?.patientId || 'local-pat',
-           status: 'active'
-        });
-      }
+      const apptId = String(appointmentId);
+      const appt = await appointmentApi.getAppointment(apptId);
+      setAppointment(appt);
       
-      // Pre-fetch records if doctor
-      if (user?.role === 'doctor' && appt) {
-         loadPatientRecords(appt.patientId);
+      if (user?.role === 'doctor') {
+        try {
+          const records = await patientApi.getPatientDocuments(appt.patientId);
+          setPatientRecords(records || []);
+        } catch (e) {
+          console.warn('Could not load patient records', e);
+        }
       }
     } catch (err) {
-      console.error(err);
-      setSession(null);
-    }
-    finally {
+      showToast('Error loading session data', 'error');
+    } finally {
       setLoading(false);
     }
   };
 
-  const loadPatientRecords = async (patientId: string) => {
-     setLoadingRecords(true);
-     try {
-        const docs = await patientApi.getPatientDocuments(patientId);
-        setPatientRecords(docs || []);
-     } catch (err) {
-        console.warn('Could not fetch patient documents');
-     } finally {
-        setLoadingRecords(false);
-     }
+  const startSpeechRecognition = () => {
+    if (typeof window === 'undefined') return;
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
+      }
+      if (finalTranscript.trim()) {
+        if (user?.role === 'doctor') setTranscript(prev => prev + ' ' + finalTranscript);
+      }
+    };
+
+    recognition.onend = () => { if (inCall) recognition.start(); };
+    recognition.start();
   };
 
   const handleIssuePrescription = async () => {
@@ -254,14 +242,6 @@ export default function TelemedicineSession() {
       setIssuedQrCode(result.qrCode);
       setIssuedPrescription(result.prescription);
 
-      if (socketRef.current) {
-        socketRef.current.emit('prescription_issued', {
-          roomId: appointmentId,
-          prescription: result.prescription,
-          qrCode: result.qrCode
-        });
-      }
-
       showToast('Digital Prescription issued securely!', 'success');
       setPrescriptionData({ medication: '', dosage: '', frequency: '', duration: '', instructions: '' });
       sigCanvas.current?.clear();
@@ -272,303 +252,18 @@ export default function TelemedicineSession() {
     }
   };
 
-  const handleIncomingData = (data: any) => {
-    switch (data.type) {
-      case 'chat':
-        setMessages(prev => [...prev, { senderId: data.senderId, senderName: data.senderName, text: data.text, timestamp: new Date() }]);
-        if (!showChat) showToast(`New message from ${data.senderName}`, 'info');
-        break;
-      case 'transcript':
-        if (user?.role === 'doctor') {
-          setTranscript(prev => prev + ' ' + data.text);
-        }
-        break;
-      case 'call_ended':
-        setCallEnded(true);
-        break;
-      case 'prescription_issued':
-        setIssuedPrescription(data.prescription);
-        setIssuedQrCode(data.qrCode);
-        showToast('Doctor has issued a new prescription', 'success');
-        break;
-    }
-  };
-
-  const sendMessage = () => {
-    if (!chatInput.trim() || !socketRef.current) return;
-    const msg = {
-      senderId: user?.id,
-      senderName: user?.name,
-      text: chatInput,
-      timestamp: new Date()
-    };
-    socketRef.current.emit('chat_message', { roomId: appointmentId, msg });
-    setMessages(prev => [...prev, msg]);
-    setChatInput('');
-  };
-
-  const setupCallHandlers = (pc: RTCPeerConnection) => {
-    pc.ontrack = (event) => {
-       console.log('Main stream received:', event.streams[0]);
-       setRemoteStream(event.streams[0]);
-       setRemoteStreamConnected(true);
-    };
-    
-    pc.oniceconnectionstatechange = () => {
-       if (pc.iceConnectionState === 'disconnected') {
-          setRemoteStreamConnected(false);
-       }
-    };
-  };
-
-  const startSpeechRecognition = () => {
-    if (typeof window === 'undefined') return;
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onresult = (event: any) => {
-      let finalTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
-      }
-      if (finalTranscript.trim()) {
-        if (user?.role === 'patient' && socketRef.current) {
-          socketRef.current.emit('transcript_data', { roomId: appointmentId, text: finalTranscript });
-        }
-        if (user?.role === 'doctor') setTranscript(prev => prev + ' ' + finalTranscript);
-      }
-    };
-
-    recognition.onend = () => { if (inCall) recognition.start(); };
-    recognition.start();
-    recognitionRef.current = recognition;
-  };
-
-  const toggleMic = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getAudioTracks().forEach(track => {
-        track.enabled = !micEnabled;
-      });
-      setMicEnabled(!micEnabled);
-    }
-  };
-
-  const toggleVideo = () => {
-    if (localStreamRef.current) {
-      localStreamRef.current.getVideoTracks().forEach(track => {
-        track.enabled = !videoEnabled;
-      });
-      setVideoEnabled(!videoEnabled);
-    }
-  };
-
-  const startCall = async (existingStream?: MediaStream) => {
-    const stream = existingStream || localStreamRef.current;
-    if (!stream) {
-       console.warn('Cannot start call: Media stream not ready.');
-       return;
-    }
-
-    setInCall(true);
-    setConnectionStatus('Searching for peer...');
-    setPeerFound(false);
-    showToast('Initializing secure link...', 'info');
-
-    const apptId = String(appointmentId);
-
-    try {
-       // 1. Determine local signaling URL context
-       const isTunnel = window.location.hostname.includes('ngrok') || window.location.hostname.includes('loca.lt') || window.location.hostname.includes('cloudflare');
-       const defaultLocalUrl = isTunnel 
-          ? `${window.location.protocol}//${window.location.host}` 
-          : `${window.location.protocol}//${window.location.hostname}:3004`;
-
-       // 2. FETCH session metadata from shared Atlas (to find if doctor is already broadcasting an IP)
-       const sessionData = await telemedicineApi.getSession(apptId).catch(() => null);
-       
-       let signalingUrl = defaultLocalUrl;
-
-       // 3. SMART DISCOVERY Logic:
-       // If we are a DOCTOR, we are the 'Host'. We announce our IP to Atlas.
-       // If we are a PATIENT, we read the 'Host' info from Atlas.
-       if (user?.role === 'doctor') {
-          console.log('MedSync Hosting: Advertising our signaling link to Atlas:', defaultLocalUrl);
-          await telemedicineApi.createSession({
-             appointmentId: apptId,
-             doctorId: user.id,
-             patientId: appointment?.patientId || 'unknown',
-             signalingUrl: defaultLocalUrl
-          }).catch(err => console.error('Failed to advertise host IP', err));
-          signalingUrl = defaultLocalUrl;
-       } else if (sessionData?.signalingUrl) {
-          console.log('MedSync Discovery: Connecting to Doctor at:', sessionData.signalingUrl);
-          signalingUrl = sessionData.signalingUrl;
-       }
-          
-       setActiveSignalingUrl(signalingUrl);
-       const socket = io(signalingUrl, { auth: { token: getAuthToken() }, reconnection: true });
-       socketRef.current = socket;
-
-       const pc = new RTCPeerConnection({ 
-          iceServers: [
-             { urls: 'stun:stun.l.google.com:19302' },
-             { urls: 'stun:stun1.l.google.com:19302' },
-             { urls: 'stun:stun2.l.google.com:19302' },
-             { urls: 'stun:stun.services.mozilla.com' },
-             // Free global TURN servers from OpenRelayProject for cross-network connectivity
-             { 
-               urls: 'turn:openrelay.metered.ca:80', 
-               username: 'openrelayproject', 
-               credential: 'openrelayproject' 
-             },
-             { 
-               urls: 'turn:openrelay.metered.ca:443', 
-               username: 'openrelayproject', 
-               credential: 'openrelayproject' 
-             }
-          ] 
-       });
-       pcRef.current = pc;
-       iceQueueRef.current = [];
-
-       localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
-       setupCallHandlers(pc);
-
-       let makingOffer = false;
-       let ignoreOffer = false;
-       let peerId: string | null = null;
-
-       socket.on('peer_ready', ({socketId}) => {
-          if (!peerId) {
-             peerId = socketId;
-             setPeerFound(true);
-             const polite = (socket.id || '') > socketId; 
-             setIsPolite(polite);
-             setConnectionStatus(polite ? 'Role: Receiver' : 'Role: Caller');
-             console.log(`Peer ID located: ${socketId}`);
-          }
-       });
-
-       socket.on('webrtc_offer', async ({sdp}) => {
-          try {
-             const collision = (makingOffer || pc.signalingState !== 'stable');
-             ignoreOffer = !isPolite && collision;
-             if (ignoreOffer) return;
-
-             await pc.setRemoteDescription(new RTCSessionDescription(sdp));
-             while (iceQueueRef.current.length > 0) {
-                const cand = iceQueueRef.current.shift();
-                if (cand) await pc.addIceCandidate(new RTCIceCandidate(cand));
-             }
-             await pc.setLocalDescription();
-             socket.emit('webrtc_answer', { sdp: pc.localDescription, roomId: apptId });
-          } catch (err) { console.error('Offer relay error', err); }
-       });
-
-       socket.on('webrtc_answer', async ({sdp}) => {
-          try { await pc.setRemoteDescription(new RTCSessionDescription(sdp)); } catch (err) { console.error('Answer relay error', err); }
-       });
-
-       socket.on('ice_candidate', async ({candidate}) => {
-          try {
-             if (pc.remoteDescription) { await pc.addIceCandidate(new RTCIceCandidate(candidate)); } 
-             else { iceQueueRef.current.push(candidate); }
-          } catch (err) { if (!ignoreOffer) console.warn('ICE relay error', err); }
-       });
-
-       pc.oniceconnectionstatechange = () => {
-          setIceState(pc.iceConnectionState);
-          setConnectionStatus(`Network: ${pc.iceConnectionState}`);
-          if (pc.iceConnectionState === 'connected') setRemoteStreamConnected(true);
-       };
-
-       pc.onicecandidate = ({candidate}) => {
-          if (candidate) socket.emit('ice_candidate', { candidate, roomId: apptId });
-       };
-
-       pc.onnegotiationneeded = async () => {
-          if (isPolite || !peerFound) return; 
-          try {
-             makingOffer = true;
-             await pc.setLocalDescription();
-             socket.emit('webrtc_offer', { sdp: pc.localDescription, roomId: apptId });
-          } catch (err) { console.error('Negotiation error', err); } 
-          finally { makingOffer = false; }
-       };
-
-       socket.on('connect', () => {
-          setSocketConnected(true);
-          socket.emit('join_room', apptId);
-       });
-
-       socket.on('disconnect', () => setSocketConnected(false));
-
-       socket.on('user_joined', () => {
-          socket.emit('peer_ready', { roomId: apptId });
-       });
-
-       // THE PULSE SHIELD (1s Interval)
-       const pulseInterval = setInterval(() => {
-          if (socket.connected && pc.iceConnectionState !== 'connected') {
-             socket.emit('peer_ready', { roomId: apptId });
-             if (peerId && !isPolite && pc.signalingState === 'stable') {
-                pc.onnegotiationneeded?.(new Event('negotiationneeded'));
-             }
-          }
-       }, 1000);
-
-       socket.on('chat_message', (msg) => setMessages(prev => [...prev, msg]));
-       socket.on('transcript_data', (data) => { if (user?.role === 'doctor') setTranscript(prev => prev + ' ' + data.text); });
-       socket.on('prescription_issued', (data) => {
-          setIssuedPrescription(data.prescription);
-          setIssuedQrCode(data.qrCode);
-          showToast('New Prescription Received', 'success');
-       });
-
-       startSpeechRecognition();
-       return () => {
-          clearInterval(pulseInterval);
-          socket.disconnect();
-       };
-    } catch (err) {
-       console.error('Signaling Error:', err);
-    }
-  };
-
-  const resetHandshake = () => {
-      setConnectionStatus('Resetting Handshake...');
-      if (pcRef.current) {
-          pcRef.current.close();
-          const pc = new RTCPeerConnection({ 
-              iceServers: [
-                  { urls: 'stun:stun.l.google.com:19302' },
-                  { urls: 'stun:stun1.l.google.com:19302' }
-              ] 
-          });
-          pcRef.current = pc;
-          localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
-          setupCallHandlers(pc);
-          startCall(); 
-      }
-  };
-
   const endCall = async () => {
-    localStreamRef.current?.getTracks().forEach(t => t.stop());
-    pcRef.current?.close();
-    socketRef.current?.disconnect();
+    if (jitsiApi) {
+      jitsiApi.dispose();
+    }
     setInCall(false);
     setCallEnded(true);
     if (user?.role === 'doctor') {
       try {
-        await telemedicineApi.endSession(appointmentId as string);
         await appointmentApi.updateStatus(appointmentId as string, { status: 'completed' });
       } catch (err) {}
     }
+    router.push('/dashboard');
   };
 
   if (authLoading || loading) return (
@@ -578,14 +273,6 @@ export default function TelemedicineSession() {
      </div>
   );
   
-  if (!session) return (
-     <div className="med-card urgency-high max-w-lg mx-auto mt-20">
-        <h3 className="flex items-center gap-2 font-bold mb-2"><AlertCircle /> Session Expired</h3>
-        <p>This telemedicine session link is no longer valid or has been closed.</p>
-        <Button onClick={() => router.back()} className="mt-4 secondary sm">Go Back</Button>
-     </div>
-  );
-
   const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
@@ -604,9 +291,6 @@ export default function TelemedicineSession() {
              <span className="badge info">
                <Network size={12} style={{ marginRight: '4px' }} /> Optimized Network
              </span>
-             <span className="badge" style={{ background: 'var(--bg-main)', color: 'var(--text-secondary)', border: '1px solid var(--card-border)' }}>
-               <Bot size={12} style={{ marginRight: '4px' }} /> {connectionStatus}
-             </span>
           </div>
         </div>
         {inCall && (
@@ -617,129 +301,30 @@ export default function TelemedicineSession() {
         )}
       </div>
       
-      {!inCall ? (
-        <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-           <div className="med-card" style={{ maxWidth: '450px', width: '100%', textAlign: 'center', borderTop: '6px solid var(--primary)' }}>
-              <div style={{ width: '80px', height: '80px', borderRadius: '50%', background: 'var(--primary-light)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '2rem', margin: '0 auto 24px' }}>
-                🎥
-              </div>
-              <h2 style={{ fontSize: '1.4rem', fontWeight: 700, marginBottom: '8px' }}>Ready to connect?</h2>
-              <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>
-                Consultation with <strong>{user?.role === 'patient' ? `Dr. ${appointment?.doctorName}` : appointment?.patientName}</strong>. 
-                Ensure your camera and microphone are permitted.
-              </p>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                 <Button className="primary" style={{ padding: '16px', fontSize: '1.1rem' }} onClick={startCall}>
-                   Join Secure Consultation Room
-                 </Button>
-                 <Button className="secondary" onClick={() => router.back()}>
-                   Cancel & Go Back
-                 </Button>
-              </div>
-           </div>
-        </div>
-      ) : (
-        <div style={{ flex: 1, display: 'flex', gap: '24px', minHeight: 0 }}>
-          {/* Main Video Area */}
-          <div style={{ flex: 1, background: '#0f172a', borderRadius: 'var(--radius-xl)', position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-lg)' }}>
-            {/* Live Remote Video */}
-            <video 
-              ref={remoteVideoRef} 
-              autoPlay 
-              playsInline 
-              style={{ width: '100%', height: '100%', objectFit: 'cover', display: remoteStreamConnected ? 'block' : 'none' }}
-            />
+      <div style={{ flex: 1, display: 'flex', gap: '24px', minHeight: 0 }}>
+          {/* Global Video Bridge Area */}
+          <div style={{ padding: '24px', flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <div style={{ 
+              flex: 1, 
+              background: '#0f172a', 
+              borderRadius: 'var(--radius-2xl)', 
+              position: 'relative', 
+              overflow: 'hidden',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+              border: '1px solid rgba(255,255,255,0.05)'
+            }}>
+              {/* Jitsi Meeting Frame */}
+              <div 
+                ref={jitsiContainerRef} 
+                style={{ width: '100%', height: '100%' }}
+              />
 
-            {!remoteStreamConnected && (
-              <div style={{ textAlign: 'center' }}>
-                <div className="avatar lg" style={{ margin: '0 auto 16px', border: '4px solid #334155' }}>
-                  {user?.role === 'patient' ? '👨‍⚕️' : '👤'}
+              {!jitsiLoaded && (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', zIndex: 10, background: '#0f172a' }}>
+                   <div className="loading-spinner"></div>
+                   <p style={{ marginTop: '16px', color: '#94a3b8', fontWeight: 500 }}>Connecting to Global Medical Bridge...</p>
                 </div>
-                <h3 style={{ color: 'white', fontSize: '1.2rem', fontWeight: 700 }}>
-                   Waiting for {user?.role === 'patient' ? `Dr. ${appointment?.doctorName}` : appointment?.patientName} to join...
-                </h3>
-                <p style={{ color: '#94a3b8', fontSize: '0.9rem', marginTop: '4px' }} className="animate-pulse">Monitoring P2P Signaling Server</p>
-              </div>
-            )}
-
-            {/* PIP (Local Video) */}
-            <div style={{ position: 'absolute', top: '24px', right: '24px', width: '200px', aspectRatio: '16/9', background: '#1e293b', borderRadius: 'var(--radius-md)', border: '2px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden', boxShadow: 'var(--shadow-md)' }}>
-               <video 
-                 ref={localVideoRef} 
-                 autoPlay 
-                 playsInline 
-                 muted
-                 style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-               />
-               <div style={{ position: 'absolute', top: '8px', left: '8px', color: 'rgba(255,255,255,0.7)', fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '1px', background: 'rgba(0,0,0,0.5)', padding: '2px 6px', borderRadius: '4px' }}>Self View</div>
-            </div>
-
-            {/* Chat Floating Bubble & Panel (Patient Only) */}
-            {user?.role === 'patient' && (
-              <>
-                <button 
-                  onClick={() => setShowChat(!showChat)}
-                  style={{ position: 'absolute', bottom: '32px', right: '32px', width: '56px', height: '56px', borderRadius: '50%', background: 'var(--primary)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'var(--shadow-lg)', zIndex: 100 }}
-                >
-                   <Bot size={24} />
-                </button>
-                
-                {showChat && (
-                  <div className="med-card animate-in" style={{ position: 'absolute', bottom: '100px', right: '32px', width: '320px', height: '400px', display: 'flex', flexDirection: 'column', padding: '16px', zIndex: 100, boxShadow: 'var(--shadow-xl)' }}>
-                    <div style={{ fontWeight: 700, marginBottom: '12px', borderBottom: '1px solid var(--card-border)', paddingBottom: '8px' }}>Chat with Doctor</div>
-                    <div style={{ flex: 1, overflowY: 'auto', marginBottom: '12px' }} className="custom-scrollbar">
-                       {messages.map((m, i) => (
-                          <div key={i} style={{ marginBottom: '8px', textAlign: m.senderId === user?.id ? 'right' : 'left' }}>
-                             <div style={{ 
-                                display: 'inline-block', 
-                                padding: '6px 12px', 
-                                borderRadius: '12px', 
-                                fontSize: '0.8rem',
-                                background: m.senderId === user?.id ? 'var(--primary)' : 'var(--bg-main)',
-                                color: m.senderId === user?.id ? 'white' : 'var(--text-main)',
-                                border: m.senderId === user?.id ? 'none' : '1px solid var(--card-border)'
-                             }}>
-                                {m.text}
-                             </div>
-                          </div>
-                       ))}
-                    </div>
-                    <div style={{ display: 'flex', gap: '8px' }}>
-                       <Input 
-                         placeholder="Type..." 
-                         value={chatInput} 
-                         onChange={(e) => setChatInput(e.target.value)}
-                         onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                         style={{ marginBottom: 0, padding: '8px' }}
-                       />
-                       <Button className="primary sm" onClick={sendMessage}>Send</Button>
-                    </div>
-                  </div>
-                )}
-              </>
-            )}
-
-            {/* Floating Controls */}
-            <div style={{ position: 'absolute', bottom: '32px', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '16px', padding: '16px 24px', background: 'rgba(15, 23, 42, 0.8)', backdropFilter: 'blur(10px)', borderRadius: '30px', border: '1px solid rgba(255,255,255,0.1)' }}>
-               <button 
-                 onClick={toggleMic}
-                 style={{ width: '48px', height: '48px', borderRadius: '50%', background: micEnabled ? 'rgba(255,255,255,0.1)' : 'var(--error)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-               >
-                  <Mic size={20} />
-               </button>
-               <button 
-                 onClick={toggleVideo}
-                 style={{ width: '48px', height: '48px', borderRadius: '50%', background: videoEnabled ? 'rgba(255,255,255,0.1)' : 'var(--error)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.2s' }}
-               >
-                  <Video size={20} />
-               </button>
-               <div style={{ width: '1px', height: '32px', background: 'rgba(255,255,255,0.1)', margin: '0 8px' }}></div>
-               <button 
-                 onClick={endCall}
-                 style={{ width: '56px', height: '56px', borderRadius: '50%', background: 'var(--error)', color: 'white', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(220, 38, 38, 0.4)' }}
-               >
-                  <PhoneOff size={24} />
-               </button>
+              )}
             </div>
           </div>
 
@@ -769,13 +354,6 @@ export default function TelemedicineSession() {
                       >
                         <Clipboard size={16} /> Rx
                       </button>
-                      <button 
-                        onClick={() => setActiveTab('chat' as any)}
-                        className={`tab-button ${activeTab === ('chat' as any) ? 'active' : ''}`}
-                        style={{ flex: 1, padding: '16px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
-                      >
-                        <Bot size={16} /> Chat
-                      </button>
                   </div>
 
                   <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }} className="custom-scrollbar">
@@ -800,43 +378,6 @@ export default function TelemedicineSession() {
                                   </div>
                                </div>
                             )}
-                         </div>
-                      )}
-
-                      {activeTab === ('chat' as any) && (
-                         <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                            <div style={{ flex: 1, overflowY: 'auto', marginBottom: '16px' }} className="custom-scrollbar">
-                               {messages.length === 0 ? (
-                                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', marginTop: '40px', fontSize: '0.8rem' }}>No messages yet</div>
-                               ) : (
-                                  messages.map((m, i) => (
-                                     <div key={i} style={{ marginBottom: '12px', textAlign: m.senderId === user?.id ? 'right' : 'left' }}>
-                                        <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', marginBottom: '2px' }}>{m.senderName}</div>
-                                        <div style={{ 
-                                           display: 'inline-block', 
-                                           padding: '8px 12px', 
-                                           borderRadius: '12px', 
-                                           fontSize: '0.85rem',
-                                           background: m.senderId === user?.id ? 'var(--primary)' : 'var(--bg-main)',
-                                           color: m.senderId === user?.id ? 'white' : 'var(--text-main)',
-                                           border: m.senderId === user?.id ? 'none' : '1px solid var(--card-border)'
-                                        }}>
-                                           {m.text}
-                                        </div>
-                                     </div>
-                                  ))
-                               )}
-                            </div>
-                            <div style={{ display: 'flex', gap: '8px' }}>
-                               <Input 
-                                 placeholder="Type a message..." 
-                                 value={chatInput}
-                                 onChange={(e) => setChatInput(e.target.value)}
-                                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                                 style={{ marginBottom: 0 }}
-                               />
-                               <Button className="primary sm" onClick={sendMessage}>Send</Button>
-                            </div>
                          </div>
                       )}
 
@@ -884,21 +425,13 @@ export default function TelemedicineSession() {
 
                   <div style={{ padding: '16px', background: 'var(--bg-main)', borderTop: '1px solid var(--card-border)', display: 'flex', gap: '12px' }}>
                      <Button className="secondary" style={{ flex: 1, fontSize: '0.9rem', fontWeight: 700, padding: '12px' }} onClick={endCall}>
-                        Finalize
-                     </Button>
-                     <Button 
-                        variant="secondary" 
-                        style={{ flex: 1, fontSize: '0.9rem', fontWeight: 700, padding: '12px', border: '1px solid var(--error)', color: 'var(--error)', background: 'transparent' }} 
-                        onClick={resetHandshake}
-                     >
-                        Reset Link
+                        Finalize Consultation
                      </Button>
                   </div>
                </div>
             </div>
           )}
         </div>
-      )}
 
       {/* Prescription Modal - Live Editor */}
       <Modal 
@@ -1070,13 +603,13 @@ export default function TelemedicineSession() {
       }}>
         <div style={{ 
           width: '8px', height: '8px', borderRadius: '50%', 
-          background: socketConnected ? '#10b981' : '#f59e0b',
-          boxShadow: socketConnected ? '0 0 12px #10b981' : '0 0 12px #f59e0b'
+          background: inCall ? '#10b981' : '#f59e0b',
+          boxShadow: inCall ? '0 0 12px #10b981' : '0 0 12px #f59e0b'
         }} />
-        {socketConnected ? 'Secure Line Active' : 'Connecting to Clinic...'}
-        {socketConnected && !peerFound && <span style={{ opacity: 0.6, fontSize: '10px', marginLeft: '6px' }}>• Awaiting Participant</span>}
+        {inCall ? 'Global Global Secured Bridge' : 'Syncing Cloud...'}
       </div>
     </div>
   );
 }
+
 
