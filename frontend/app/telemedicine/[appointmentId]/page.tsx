@@ -3,10 +3,18 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuth } from '../../context/AuthContext';
-import { telemedicineApi, appointmentApi, patientApi, doctorApi, symptomApi } from '../../services/api';
-import { Mic, Video, PhoneOff, Bot, FileText, Clipboard, AlertCircle, CheckCircle, Shield, Network, Trash2, Camera } from 'lucide-react';
+import { 
+  telemedicineApi, 
+  appointmentApi, 
+  patientApi, 
+  doctorApi, 
+  symptomApi, 
+  getAuthToken 
+} from '../../services/api';
+import { Mic, MicOff, Video, VideoOff, PhoneOff, Bot, FileText, Clipboard, AlertCircle, CheckCircle, Shield, Network, Trash2, Camera, MessageSquare, Send } from 'lucide-react';
 import { MedButton as Button, Modal, MedInput as Input, showToast } from '../../components/UI';
 import SignatureCanvas from 'react-signature-canvas';
+import { io, Socket } from 'socket.io-client';
 
 export default function TelemedicineSession() {
   const { appointmentId } = useParams();
@@ -38,12 +46,15 @@ export default function TelemedicineSession() {
   const [issuedPrescription, setIssuedPrescription] = useState<any>(null);
   const sigCanvas = useRef<any>(null);
 
-  // WebRTC PeerJS Refs
+  // WebRTC & Signaling Refs
   const localVideoRef = useRef<HTMLVideoElement>(null);
   const remoteVideoRef = useRef<HTMLVideoElement>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
-  const peerRef = useRef<any>(null);
-  const dataConnRef = useRef<any>(null);
+  const pcRef = useRef<RTCPeerConnection | null>(null);
+  const socketRef = useRef<Socket | null>(null);
+  const recognitionRef = useRef<any>(null);
+
+  const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [remoteStreamConnected, setRemoteStreamConnected] = useState(false);
 
   // Transcription & Chat State
@@ -54,8 +65,6 @@ export default function TelemedicineSession() {
   const [chatInput, setChatInput] = useState('');
   const [showChat, setShowChat] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
-  const recognitionRef = useRef<any>(null);
-  const callActiveRef = useRef<any>(null);
 
   // Media Controls State
   const [micEnabled, setMicEnabled] = useState(true);
@@ -68,6 +77,21 @@ export default function TelemedicineSession() {
       localVideoRef.current.play().catch(e => console.warn('Self-view play blocked', e));
     }
   }, [inCall, localStreamRef.current]);
+
+  // Sync Remote Video (Robust State-Driven Attachment)
+  useEffect(() => {
+    if (remoteStream && remoteVideoRef.current) {
+       console.log('Syncing Remote Video DOM with State Stream:', remoteStream.id);
+       remoteVideoRef.current.srcObject = remoteStream;
+       remoteVideoRef.current.play().catch(e => {
+          console.warn('Remote playback blocked. Attempting muted autoplay fallback...', e);
+          if (remoteVideoRef.current) {
+             remoteVideoRef.current.muted = true;
+             remoteVideoRef.current.play().catch(p => console.error('Full playback failure', p));
+          }
+       });
+    }
+  }, [remoteStream, remoteVideoRef.current]);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -163,14 +187,13 @@ export default function TelemedicineSession() {
     }
     
     if (sigCanvas.current?.isEmpty()) {
-      showToast('Please draw your signature to authorize this prescription', 'warning');
+      showToast('Signature required', 'warning');
       return;
     }
 
     setIsIssuing(true);
     try {
       const signatureBase64 = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
-
       const result = await doctorApi.issuePrescription({
         patientId: appointment?.patientId,
         patientName: appointment?.patientName,
@@ -189,21 +212,17 @@ export default function TelemedicineSession() {
       setIssuedQrCode(result.qrCode);
       setIssuedPrescription(result.prescription);
 
-      // Notify Patient via P2P Data Channel
-      if (dataConnRef.current) {
-        dataConnRef.current.send({
-          type: 'prescription_issued',
+      if (socketRef.current) {
+        socketRef.current.emit('prescription_issued', {
+          roomId: appointmentId,
           prescription: result.prescription,
           qrCode: result.qrCode
         });
       }
 
       showToast('Digital Prescription issued securely!', 'success');
-      // We don't close the modal yet to show the QR code
       setPrescriptionData({ medication: '', dosage: '', frequency: '', duration: '', instructions: '' });
-      if (sigCanvas.current) {
-         sigCanvas.current.clear();
-      }
+      sigCanvas.current?.clear();
     } catch (err: any) {
       showToast(err.message || 'Failed to issue prescription', 'error');
     } finally {
@@ -234,58 +253,36 @@ export default function TelemedicineSession() {
   };
 
   const sendMessage = () => {
-    if (!chatInput.trim() || !dataConnRef.current) return;
+    if (!chatInput.trim() || !socketRef.current) return;
     const msg = {
-      type: 'chat',
       senderId: user?.id,
       senderName: user?.name,
       text: chatInput,
       timestamp: new Date()
     };
-    dataConnRef.current.send(msg);
+    socketRef.current.emit('chat_message', { roomId: appointmentId, msg });
     setMessages(prev => [...prev, msg]);
     setChatInput('');
   };
 
-  const setupCallHandlers = (call: any) => {
-    callActiveRef.current = call;
+  const setupCallHandlers = (pc: RTCPeerConnection) => {
+    pc.ontrack = (event) => {
+       console.log('Main stream received:', event.streams[0]);
+       setRemoteStream(event.streams[0]);
+       setRemoteStreamConnected(true);
+    };
     
-    call.on('stream', (remoteStream: MediaStream) => {
-       // Deduplication: Only attach if the stream is truly new or if current source is empty
-       if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== remoteStream) {
-          console.log('Attaching remote stream from peer:', call.peer);
-          remoteVideoRef.current.srcObject = remoteStream;
-          setRemoteStreamConnected(true);
-          showToast('Media Connection Secure', 'success');
-          remoteVideoRef.current.play().catch(e => {
-             console.warn('Playback blocked by browser auto-play policy. Retrying...', e);
-             // Browsers sometimes need a user gesture, but muted/autoPlay often works
-             if (remoteVideoRef.current) remoteVideoRef.current.muted = true; 
-             remoteVideoRef.current?.play();
-          });
+    pc.oniceconnectionstatechange = () => {
+       if (pc.iceConnectionState === 'disconnected') {
+          setRemoteStreamConnected(false);
        }
-    });
-    
-    call.on('close', () => {
-       setRemoteStreamConnected(false);
-       callActiveRef.current = null;
-       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
-    });
-
-    call.on('error', (err: any) => {
-       console.error('Media connection error:', err);
-       setRemoteStreamConnected(false);
-       callActiveRef.current = null;
-    });
+    };
   };
 
   const startSpeechRecognition = () => {
     if (typeof window === 'undefined') return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      console.warn('Speech recognition not supported in this browser');
-      return;
-    }
+    if (!SpeechRecognition) return;
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
@@ -295,29 +292,17 @@ export default function TelemedicineSession() {
     recognition.onresult = (event: any) => {
       let finalTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        }
+        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
       }
-
       if (finalTranscript.trim()) {
-        if (user?.role === 'patient' && dataConnRef.current) {
-          dataConnRef.current.send({ type: 'transcript', text: finalTranscript });
+        if (user?.role === 'patient' && socketRef.current) {
+          socketRef.current.emit('transcript_data', { roomId: appointmentId, text: finalTranscript });
         }
-        if (user?.role === 'doctor') {
-           setTranscript(prev => prev + ' ' + finalTranscript);
-        }
+        if (user?.role === 'doctor') setTranscript(prev => prev + ' ' + finalTranscript);
       }
     };
 
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error', event.error);
-    };
-
-    recognition.onend = () => {
-      if (inCall) recognition.start(); // Keep listening
-    };
-
+    recognition.onend = () => { if (inCall) recognition.start(); };
     recognition.start();
     recognitionRef.current = recognition;
   };
@@ -355,120 +340,71 @@ export default function TelemedicineSession() {
     }
 
     setInCall(true);
-    showToast('Connecting to Cloud Switchboard...', 'info');
+    showToast('Initializing secure link...', 'info');
 
-    // Dynamically load PeerJS to completely bypass Next.js SSR window crash errors
-    const PeerPkg = await import('peerjs');
-    const Peer = PeerPkg.default;
+    try {
+       const socket = io('http://localhost:3004', { auth: { token: getAuthToken() } });
+       socketRef.current = socket;
 
-    // We generate a deterministic ID linking them to this specific room securely
-    const myId = user?.role === 'doctor' ? `medsync-doc-${appointmentId}` : `medsync-pat-${appointmentId}`;
-    const targetId = user?.role === 'doctor' ? `medsync-pat-${appointmentId}` : `medsync-doc-${appointmentId}`;
+       const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+       pcRef.current = pc;
 
-    // Connect to the free worldwide PeerJS STUN cloud over standard HTTPS 443 (Bypasses Firewall exactly as requested!)
-    const peer = new Peer(myId, {
-      secure: true,
-      port: 443,
-      config: {
-        iceServers: [
-          { urls: 'stun:stun.l.google.com:19302' },
-          { urls: 'stun:stun1.l.google.com:19302' }
-        ]
-      }
-    });
-    peerRef.current = peer;
+       localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
+       setupCallHandlers(pc);
 
-    // 1. ALWAYS securely auto-answer any incoming pings with my camera feed
-    peer.on('call', (call) => {
-      console.log('Receiving dial request...');
-      call.answer(localStreamRef.current!); // Send my stream back
-      setupCallHandlers(call);
-    });
+       pc.onicecandidate = (e) => {
+          if (e.candidate) socket.emit('ice_candidate', { candidate: e.candidate, roomId: appointmentId });
+       };
 
-    // Start Speech Recognition for English Voice Capture
-    startSpeechRecognition();
+       socket.on('connect', () => socket.emit('join_room', appointmentId));
+       
+       socket.on('user_joined', async () => {
+          const offer = await pc.createOffer();
+          await pc.setLocalDescription(offer);
+          socket.emit('webrtc_offer', { sdp: offer, roomId: appointmentId });
+       });
 
-    // Handle Incoming Data Connections (Chat/Transcription)
-    peer.on('connection', (conn) => {
-      dataConnRef.current = conn;
-      conn.on('data', (data: any) => {
-        handleIncomingData(data);
-      });
-      showToast('Secure data channel ready', 'success');
-    });
+       socket.on('webrtc_offer', async (data) => {
+          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          socket.emit('webrtc_answer', { sdp: answer, roomId: appointmentId });
+       });
 
-    peer.on('open', (id) => {
-      console.log('Connected to Switchboard. My Peer ID:', id);
+       socket.on('webrtc_answer', async (data) => {
+          await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+       });
 
-      // 2. If Doctor, run an automated dial-queue every 3s in case the patient connects late
-      if (user?.role === 'doctor') {
-        const ringInterval = setInterval(() => {
-          if (remoteVideoRef.current?.srcObject || callActiveRef.current) {
-            if (remoteVideoRef.current?.srcObject) clearInterval(ringInterval);
-            return;
-          }
-          
-          console.log(`Dialing patient ${targetId}...`);
-          // Dial Media
-          const call = peer.call(targetId, localStreamRef.current!);
-          if (call) {
-            setupCallHandlers(call);
-          }
-          // Dial Data
-          const conn = peer.connect(targetId);
-          if (conn) {
-            dataConnRef.current = conn;
-            conn.on('data', (data: any) => {
-              handleIncomingData(data);
-            });
-          }
-        }, 3000);
-      }
-    });
+       socket.on('ice_candidate', (data) => {
+          pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+       });
 
-    peer.on('error', (err: any) => {
-      if (err.type === 'peer-unavailable') {
-         // The patient isn't connected yet. Reset the active call so the dialer tries again on the next tick.
-         callActiveRef.current = null;
-         console.log('Participant not found. Retrying...');
-      } else {
-         console.warn('Peer error:', err);
-      }
-    });
+       socket.on('chat_message', (msg) => setMessages(prev => [...prev, msg]));
+       socket.on('transcript_data', (data) => { if (user?.role === 'doctor') setTranscript(prev => prev + ' ' + data.text); });
+       socket.on('prescription_issued', (data) => {
+          setIssuedPrescription(data.prescription);
+          setIssuedQrCode(data.qrCode);
+          showToast('New Prescription Received', 'success');
+       });
 
-    peer.on('disconnected', () => {
-       console.log('Lost connection to signaling server. Attempting to reconnect...');
-       if (peerRef.current && !peerRef.current.destroyed) {
-          peerRef.current.reconnect();
-       }
-    });
+       startSpeechRecognition();
+    } catch (err) {
+       console.error(err);
+       showToast('Connection failed', 'error');
+    }
   };
 
   const endCall = async () => {
-    // Safely teardown WebRTC infrastructure
-    if (localStreamRef.current) {
-      localStreamRef.current.getTracks().forEach(track => track.stop());
-    }
-    
-    // Notify peer before destroying if possible
-    if (dataConnRef.current) {
-      dataConnRef.current.send({ type: 'call_ended' });
-    }
-
-    if (peerRef.current) {
-      peerRef.current.destroy();
-    }
-    
+    localStreamRef.current?.getTracks().forEach(t => t.stop());
+    pcRef.current?.close();
+    socketRef.current?.disconnect();
     setInCall(false);
-    setCallEnded(true); // Show local summary
-    
+    setCallEnded(true);
     if (user?.role === 'doctor') {
       try {
         await telemedicineApi.endSession(appointmentId as string);
-        await appointmentApi.updateStatus(appointmentId as string, { status: 'completed', notes: 'Consultation ended by doctor' });
-      } catch (err) {
-        console.error(err);
-      }
+        await appointmentApi.updateStatus(appointmentId as string, { status: 'completed' });
+      } catch (err) {}
     }
   };
 
