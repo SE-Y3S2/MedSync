@@ -8,11 +8,14 @@ const getCookie = (name: string) => {
   return match ? decodeURIComponent(match[2]) : null;
 };
 
+export const getAuthToken = () => {
+  if (typeof window === 'undefined') return null;
+  return getCookie('medsync_token') || localStorage.getItem('medsync_token');
+};
+
 // ── Auth Helper ──
 const getAuthHeaders = (): HeadersInit => {
-  const token = typeof window !== 'undefined'
-    ? (getCookie('medsync_token') || localStorage.getItem('medsync_token'))
-    : null;
+  const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
@@ -21,9 +24,7 @@ const getAuthHeaders = (): HeadersInit => {
 };
 
 const getAuthHeadersNoContentType = (): HeadersInit => {
-  const token = typeof window !== 'undefined'
-    ? (getCookie('medsync_token') || localStorage.getItem('medsync_token'))
-    : null;
+  const token = getAuthToken();
   const headers: HeadersInit = {};
   if (token) {
     (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
