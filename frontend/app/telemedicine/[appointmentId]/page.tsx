@@ -69,6 +69,8 @@ export default function TelemedicineSession() {
   const [chatInput, setChatInput] = useState('');
   const [showChat, setShowChat] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
+  const [isScribeListening, setIsScribeListening] = useState(false);
+  const recognitionRef = useRef<any>(null);
 
   // Media Controls State
   const [micEnabled, setMicEnabled] = useState(true);
@@ -221,13 +223,36 @@ export default function TelemedicineSession() {
 
    const startSpeechRecognition = (currentSocket: Socket | null) => {
     if (typeof window === 'undefined') return;
+    
+    // Stop existing if any
+    if (recognitionRef.current) {
+       try { recognitionRef.current.stop(); } catch(e) {}
+    }
+
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+       console.error('MedSync: SpeechRecognition not supported in this browser.');
+       return;
+    }
 
     const recognition = new SpeechRecognition();
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+       setIsScribeListening(true);
+       console.log('MedSync: AI Scribe Active & Listening');
+    };
+
+    recognition.onerror = (event: any) => {
+       console.error('MedSync Scribe Error:', event.error);
+       if (event.error === 'no-speech' || event.error === 'audio-capture' || event.error === 'network') {
+          setIsScribeListening(false);
+          // Auto-restart on non-fatal errors
+          setTimeout(() => { if (inCall) startSpeechRecognition(currentSocket); }, 1000);
+       }
+    };
 
     recognition.onresult = (event: any) => {
       let finalTranscript = '';
@@ -238,7 +263,6 @@ export default function TelemedicineSession() {
         if (user?.role === 'doctor') {
           setTranscript(prev => prev + ' ' + finalTranscript);
         } else {
-           // Patient beams to Doctor
            currentSocket?.emit('relay_message', {
               roomId: appointmentId,
               type: 'transcript',
@@ -248,8 +272,25 @@ export default function TelemedicineSession() {
       }
     };
 
-    recognition.onend = () => { if (inCall) recognition.start(); };
-    recognition.start();
+    recognition.onend = () => { 
+       setIsScribeListening(false);
+       if (inCall && !callEnded) {
+          console.log('MedSync: Scribe ended unexpectedly, attempting self-healing restart...');
+          startSpeechRecognition(currentSocket); 
+       }
+    };
+
+    recognitionRef.current = recognition;
+    try {
+       recognition.start();
+    } catch (e) {
+       console.error('MedSync: Failed to start SpeechRecognition', e);
+    }
+  };
+
+  const manualSyncScribe = () => {
+     startSpeechRecognition(socket);
+     showToast('AI Scribe Resynchronized', 'success');
   };
 
   const addMedication = () => {
@@ -422,20 +463,44 @@ export default function TelemedicineSession() {
                   <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }} className="custom-scrollbar">
                       {activeTab === 'ai' && (
                          <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                            {/* Combined Transcription Feed */}
-                            <div style={{ padding: '16px', background: 'var(--bg-main)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--card-border)', maxHeight: '300px', overflowY: 'auto' }} className="custom-scrollbar">
-                               <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <div className="pulse-dot"></div> Live Clinical Scribe
-                               </div>
-                               <div style={{ fontSize: '0.85rem', lineHeight: 1.6, color: 'var(--text-main)' }}>
-                                  <div style={{ marginBottom: '8px', borderBottom: '1px solid var(--card-border)', paddingBottom: '4px' }}>
-                                     <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Doctor:</span> {transcript || '...'}
-                                  </div>
-                                  <div>
-                                     <span style={{ fontWeight: 700, color: 'var(--success)' }}>Patient:</span> {patientTranscript || '...'}
-                                  </div>
-                               </div>
-                            </div>
+                             {/* Combined Transcription Feed */}
+                             <div style={{ padding: '16px', background: 'var(--bg-main)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--card-border)', maxHeight: '300px', overflowY: 'auto', position: 'relative' }} className="custom-scrollbar">
+                                <style>{`
+                                   @keyframes clinicalPulse {
+                                      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+                                      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
+                                      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+                                   }
+                                   .scribe-pulse {
+                                      display: inline-block;
+                                      width: 8px;
+                                      height: 8px;
+                                      border-radius: 50%;
+                                      background: #22c55e;
+                                      animation: clinicalPulse 2s infinite;
+                                   }
+                                `}</style>
+                                <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                      {isScribeListening ? <span className="scribe-pulse"></span> : <span style={{ width: '8px', height: '8px', background: 'var(--text-muted)', borderRadius: '50%' }}></span>}
+                                      Live Clinical Scribe {isScribeListening && <span style={{ color: '#22c55e', fontSize: '0.6rem', marginLeft: '4px' }}>(Listening)</span>}
+                                   </div>
+                                   <button 
+                                      onClick={manualSyncScribe} 
+                                      style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem', fontWeight: 700 }}
+                                   >
+                                      <Network size={12} /> Sync Scribe
+                                   </button>
+                                </div>
+                                <div style={{ fontSize: '0.85rem', lineHeight: 1.6, color: 'var(--text-main)' }}>
+                                   <div style={{ marginBottom: '8px', borderBottom: '1px solid var(--card-border)', paddingBottom: '4px' }}>
+                                      <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Doctor:</span> {transcript || '...'}
+                                   </div>
+                                   <div>
+                                      <span style={{ fontWeight: 700, color: 'var(--success)' }}>Patient:</span> {patientTranscript || '...'}
+                                   </div>
+                                </div>
+                             </div>
 
                             {/* Risk Identification Panel */}
                             <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(239, 68, 68, 0.1)' }}>
