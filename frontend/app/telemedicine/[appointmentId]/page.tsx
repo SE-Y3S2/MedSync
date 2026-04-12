@@ -70,6 +70,10 @@ export default function TelemedicineSession() {
   const [micEnabled, setMicEnabled] = useState(true);
   const [videoEnabled, setVideoEnabled] = useState(true);
 
+  // Robustness & Diagnostics State
+  const [connectionStatus, setConnectionStatus] = useState<string>('Ready');
+  const iceQueueRef = useRef<RTCIceCandidateInit[]>([]);
+
   // Sync Local Video Ref when coming in/out of call (Ensures 100% Visibility)
   useEffect(() => {
     if (inCall && localVideoRef.current && localStreamRef.current) {
@@ -340,43 +344,77 @@ export default function TelemedicineSession() {
     }
 
     setInCall(true);
+    setConnectionStatus('Initializing...');
     showToast('Initializing secure link...', 'info');
 
     try {
-       const socket = io('http://localhost:3004', { auth: { token: getAuthToken() } });
+       // Support cross-device testing by using the current hostname instead of localhost
+       const signalingUrl = `${window.location.protocol}//${window.location.hostname}:3004`;
+       console.log('Connecting to signaling server at:', signalingUrl);
+       
+       const socket = io(signalingUrl, { auth: { token: getAuthToken() } });
        socketRef.current = socket;
 
-       const pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] });
+       const pc = new RTCPeerConnection({ 
+          iceServers: [
+             { urls: 'stun:stun.l.google.com:19302' },
+             { urls: 'stun:stun1.l.google.com:19302' }
+          ] 
+       });
        pcRef.current = pc;
+       iceQueueRef.current = []; // Reset queue
 
        localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
        setupCallHandlers(pc);
 
        pc.onicecandidate = (e) => {
-          if (e.candidate) socket.emit('ice_candidate', { candidate: e.candidate, roomId: appointmentId });
+          if (e.candidate) {
+             console.log('Local ICE candidate generated');
+             socket.emit('ice_candidate', { candidate: e.candidate, roomId: appointmentId });
+          }
        };
 
-       socket.on('connect', () => socket.emit('join_room', appointmentId));
+       socket.on('connect', () => {
+          setConnectionStatus('Joined Signaling Server');
+          socket.emit('join_room', appointmentId);
+       });
        
        socket.on('user_joined', async () => {
+          setConnectionStatus('Partner joined, creating offer...');
           const offer = await pc.createOffer();
           await pc.setLocalDescription(offer);
           socket.emit('webrtc_offer', { sdp: offer, roomId: appointmentId });
        });
 
        socket.on('webrtc_offer', async (data) => {
+          setConnectionStatus('Receiving offer...');
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
+          
+          // Process queued ICE candidates
+          console.log(`Processing ${iceQueueRef.current.length} queued ICE candidates`);
+          while (iceQueueRef.current.length > 0) {
+             const cand = iceQueueRef.current.shift();
+             if (cand) await pc.addIceCandidate(new RTCIceCandidate(cand));
+          }
+
           const answer = await pc.createAnswer();
           await pc.setLocalDescription(answer);
           socket.emit('webrtc_answer', { sdp: answer, roomId: appointmentId });
+          setConnectionStatus('Handshake complete');
        });
 
        socket.on('webrtc_answer', async (data) => {
+          setConnectionStatus('Finalizing link...');
           await pc.setRemoteDescription(new RTCSessionDescription(data.sdp));
        });
 
-       socket.on('ice_candidate', (data) => {
-          pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+       socket.on('ice_candidate', async (data) => {
+          if (pc.remoteDescription) {
+             await pc.addIceCandidate(new RTCIceCandidate(data.candidate));
+          } else {
+             console.log('Buffering early ICE candidate');
+             iceQueueRef.current.push(data.candidate);
+          }
        });
 
        socket.on('chat_message', (msg) => setMessages(prev => [...prev, msg]));
@@ -389,7 +427,8 @@ export default function TelemedicineSession() {
 
        startSpeechRecognition();
     } catch (err) {
-       console.error(err);
+       console.error('Signaling Error:', err);
+       setConnectionStatus('Connection Failed');
        showToast('Connection failed', 'error');
     }
   };
@@ -440,6 +479,9 @@ export default function TelemedicineSession() {
              </span>
              <span className="badge info">
                <Network size={12} style={{ marginRight: '4px' }} /> Optimized Network
+             </span>
+             <span className="badge" style={{ background: 'var(--bg-main)', color: 'var(--text-secondary)', border: '1px solid var(--card-border)' }}>
+               <Bot size={12} style={{ marginRight: '4px' }} /> {connectionStatus}
              </span>
           </div>
         </div>
