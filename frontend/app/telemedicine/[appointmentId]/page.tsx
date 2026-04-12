@@ -55,6 +55,7 @@ export default function TelemedicineSession() {
   const [showChat, setShowChat] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const callActiveRef = useRef<any>(null);
 
   // Media Controls State
   const [micEnabled, setMicEnabled] = useState(true);
@@ -247,13 +248,34 @@ export default function TelemedicineSession() {
   };
 
   const setupCallHandlers = (call: any) => {
+    callActiveRef.current = call;
+    
     call.on('stream', (remoteStream: MediaStream) => {
-      if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== remoteStream) {
-        remoteVideoRef.current.srcObject = remoteStream;
-        setRemoteStreamConnected(true);
-        showToast('Video Stream Connected', 'success');
-        remoteVideoRef.current.play().catch(e => console.warn(e));
-      }
+       // Deduplication: Only attach if the stream is truly new or if current source is empty
+       if (remoteVideoRef.current && remoteVideoRef.current.srcObject !== remoteStream) {
+          console.log('Attaching remote stream from peer:', call.peer);
+          remoteVideoRef.current.srcObject = remoteStream;
+          setRemoteStreamConnected(true);
+          showToast('Media Connection Secure', 'success');
+          remoteVideoRef.current.play().catch(e => {
+             console.warn('Playback blocked by browser auto-play policy. Retrying...', e);
+             // Browsers sometimes need a user gesture, but muted/autoPlay often works
+             if (remoteVideoRef.current) remoteVideoRef.current.muted = true; 
+             remoteVideoRef.current?.play();
+          });
+       }
+    });
+    
+    call.on('close', () => {
+       setRemoteStreamConnected(false);
+       callActiveRef.current = null;
+       if (remoteVideoRef.current) remoteVideoRef.current.srcObject = null;
+    });
+
+    call.on('error', (err: any) => {
+       console.error('Media connection error:', err);
+       setRemoteStreamConnected(false);
+       callActiveRef.current = null;
     });
   };
 
@@ -346,7 +368,13 @@ export default function TelemedicineSession() {
     // Connect to the free worldwide PeerJS STUN cloud over standard HTTPS 443 (Bypasses Firewall exactly as requested!)
     const peer = new Peer(myId, {
       secure: true,
-      port: 443
+      port: 443,
+      config: {
+        iceServers: [
+          { urls: 'stun:stun.l.google.com:19302' },
+          { urls: 'stun:stun1.l.google.com:19302' }
+        ]
+      }
     });
     peerRef.current = peer;
 
@@ -375,8 +403,8 @@ export default function TelemedicineSession() {
       // 2. If Doctor, run an automated dial-queue every 3s in case the patient connects late
       if (user?.role === 'doctor') {
         const ringInterval = setInterval(() => {
-          if (remoteVideoRef.current?.srcObject) {
-            clearInterval(ringInterval);
+          if (remoteVideoRef.current?.srcObject || callActiveRef.current) {
+            if (remoteVideoRef.current?.srcObject) clearInterval(ringInterval);
             return;
           }
           
