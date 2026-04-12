@@ -164,6 +164,14 @@ export const patientApi = {
     });
     if (!response.ok) throw new Error('Failed to fetch patient documents');
     return response.json();
+  },
+
+  getPatientProfile: async (patientId: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/${patientId}`, {
+      headers: getAuthHeaders()
+    });
+    if (!response.ok) throw new Error('Failed to fetch patient profile');
+    return response.json();
   }
 };
 

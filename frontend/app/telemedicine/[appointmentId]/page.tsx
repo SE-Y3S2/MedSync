@@ -16,6 +16,15 @@ import { MedButton as Button, Modal, MedInput as Input, showToast } from '../../
 import SignatureCanvas from 'react-signature-canvas';
 import { io, Socket } from 'socket.io-client';
 
+interface PrescriptionItem {
+  id: string;
+  medication: string;
+  dosage: string;
+  frequency: string;
+  duration: string;
+  warning?: string;
+}
+
 export default function TelemedicineSession() {
   const { appointmentId } = useParams();
   const { user, isLoading: authLoading } = useAuth();
@@ -34,13 +43,11 @@ export default function TelemedicineSession() {
   
   // Prescription state
   const [showPrescriptionModal, setShowPrescriptionModal] = useState(false);
-  const [prescriptionData, setPrescriptionData] = useState({
-     medication: '',
-     dosage: '',
-     frequency: '',
-     duration: '',
-     instructions: ''
-  });
+  const [medications, setMedications] = useState<PrescriptionItem[]>([
+    { id: '1', medication: '', dosage: '', frequency: '', duration: '' }
+  ]);
+  const [prescriptionInstructions, setPrescriptionInstructions] = useState('');
+  const [patientProfile, setPatientProfile] = useState<any>(null);
   const [isIssuing, setIsIssuing] = useState(false);
   const [issuedQrCode, setIssuedQrCode] = useState<string | null>(null);
   const [issuedPrescription, setIssuedPrescription] = useState<any>(null);
@@ -51,9 +58,12 @@ export default function TelemedicineSession() {
   const [jitsiApi, setJitsiApi] = useState<any>(null);
   const [jitsiLoaded, setJitsiLoaded] = useState(false);
 
-  // Transcription & Chat State
+  // Transcription & AI Intelligence State
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [transcript, setTranscript] = useState('');
+  const [patientTranscript, setPatientTranscript] = useState('');
+  const [detectedRisks, setDetectedRisks] = useState<string[]>([]);
   const [aiAnalysis, setAiAnalysis] = useState<any>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [chatInput, setChatInput] = useState('');
@@ -121,13 +131,25 @@ export default function TelemedicineSession() {
        setJitsiApi(api);
        setInCall(true);
 
-       // Auto-start AI Scribe if doctor
-       if (user.role === 'doctor') {
-          startSpeechRecognition();
-       }
+       // Initialize Metadata Bridge (Socket 3004)
+       const serverAddr = window.location.hostname === 'localhost' ? 'http://localhost:3004' : `http://${window.location.hostname}:3004`;
+       const newSocket = io(serverAddr);
+       newSocket.emit('join_room', appointmentId);
+       
+       newSocket.on('relay_message', (data) => {
+          if (data.type === 'transcript') {
+             setPatientTranscript(prev => prev + ' ' + data.text);
+          }
+       });
+
+       setSocket(newSocket);
+
+       // Start Speech Recognition for ALL participants (Scribe mode)
+       startSpeechRecognition(newSocket);
 
        return () => {
           api.dispose();
+          newSocket.disconnect();
        };
     }
   }, [jitsiLoaded, appointment, user, appointmentId]);
@@ -148,21 +170,28 @@ export default function TelemedicineSession() {
 
   // Automated AI Analysis Loop (Doctor Only)
   useEffect(() => {
-    if (user?.role === 'doctor' && transcript.length > 50 && !isAnalyzing) {
+    const combinedTranscript = `Doctor: ${transcript}\nPatient: ${patientTranscript}`;
+    if (user?.role === 'doctor' && combinedTranscript.length > 50 && !isAnalyzing) {
       const timer = setTimeout(async () => {
         setIsAnalyzing(true);
         try {
-          const result = await symptomApi.analyzeSymptoms(transcript);
+          // Send combined transcript for cross-participant risk analysis
+          const result = await symptomApi.analyzeSymptoms(combinedTranscript);
           setAiAnalysis(result);
+          
+          // Move specialty matches to 'Detected Risks' for the UI
+          if (result.results) {
+             setDetectedRisks(result.results.map((r: any) => `${r.specialty}: ${r.urgency.toUpperCase()} risk detected`));
+          }
         } catch (e) {
           console.error('AI Analysis failed', e);
         } finally {
           setIsAnalyzing(false);
         }
-      }, 5000); // Analyze every 5 seconds if text changed
+      }, 7000); 
       return () => clearTimeout(timer);
     }
-  }, [transcript, user?.role]);
+  }, [transcript, patientTranscript, user?.role]);
 
   const loadData = async () => {
     try {
@@ -173,10 +202,14 @@ export default function TelemedicineSession() {
       
       if (user?.role === 'doctor') {
         try {
+          // Fetch full patient profile to get Allergies for safety checks
+          const profile = await patientApi.getPatientProfile(appt.patientId);
+          setPatientProfile(profile);
+          
           const records = await patientApi.getPatientDocuments(appt.patientId);
           setPatientRecords(records || []);
         } catch (e) {
-          console.warn('Could not load patient records', e);
+          console.warn('Could not load patient profile/records', e);
         }
       }
     } catch (err) {
@@ -186,7 +219,7 @@ export default function TelemedicineSession() {
     }
   };
 
-  const startSpeechRecognition = () => {
+   const startSpeechRecognition = (currentSocket: Socket | null) => {
     if (typeof window === 'undefined') return;
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) return;
@@ -202,7 +235,16 @@ export default function TelemedicineSession() {
         if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
       }
       if (finalTranscript.trim()) {
-        if (user?.role === 'doctor') setTranscript(prev => prev + ' ' + finalTranscript);
+        if (user?.role === 'doctor') {
+          setTranscript(prev => prev + ' ' + finalTranscript);
+        } else {
+           // Patient beams to Doctor
+           currentSocket?.emit('relay_message', {
+              roomId: appointmentId,
+              type: 'transcript',
+              text: finalTranscript
+           });
+        }
       }
     };
 
@@ -210,9 +252,35 @@ export default function TelemedicineSession() {
     recognition.start();
   };
 
+  const addMedication = () => {
+    setMedications([...medications, { id: Date.now().toString(), medication: '', dosage: '', frequency: '', duration: '' }]);
+  };
+
+  const updateMedication = (id: string, field: keyof PrescriptionItem, value: string) => {
+    const newMeds = medications.map(m => {
+      if (m.id === id) {
+        const updated = { ...m, [field]: value };
+        // Allergy Check
+        if (field === 'medication' && patientProfile?.allergies) {
+           const match = patientProfile.allergies.find((a: string) => value.toLowerCase().includes(a.toLowerCase()));
+           updated.warning = match ? `Warning: Patient is allergic to ${match}` : undefined;
+        }
+        return updated;
+      }
+      return m;
+    });
+    setMedications(newMeds);
+  };
+
+  const removeMedication = (id: string) => {
+    if (medications.length > 1) {
+      setMedications(medications.filter(m => m.id !== id));
+    }
+  };
+
   const handleIssuePrescription = async () => {
-    if (!prescriptionData.medication || !prescriptionData.dosage) {
-      showToast('Please fill required fields', 'warning');
+    if (medications.some(m => !m.medication || !m.dosage)) {
+      showToast('Please fill all medication fields', 'warning');
       return;
     }
     
@@ -229,21 +297,17 @@ export default function TelemedicineSession() {
         patientName: appointment?.patientName,
         doctorName: user?.name,
         appointmentId: appointmentId as string,
-        medications: [{
-          medication: prescriptionData.medication,
-          dosage: prescriptionData.dosage,
-          frequency: prescriptionData.frequency,
-          duration: prescriptionData.duration
-        }],
-        instructions: prescriptionData.instructions,
+        medications: medications.map(({ medication, dosage, frequency, duration }) => ({ medication, dosage, frequency, duration })),
+        instructions: prescriptionInstructions,
         signatureBase64
       });
       
       setIssuedQrCode(result.qrCode);
       setIssuedPrescription(result.prescription);
 
-      showToast('Digital Prescription issued securely!', 'success');
-      setPrescriptionData({ medication: '', dosage: '', frequency: '', duration: '', instructions: '' });
+      showToast('Clinical Treatment Plan issued successfully!', 'success');
+      setMedications([{ id: '1', medication: '', dosage: '', frequency: '', duration: '' }]);
+      setPrescriptionInstructions('');
       sigCanvas.current?.clear();
     } catch (err: any) {
       showToast(err.message || 'Failed to issue prescription', 'error');
@@ -263,7 +327,6 @@ export default function TelemedicineSession() {
         await appointmentApi.updateStatus(appointmentId as string, { status: 'completed' });
       } catch (err) {}
     }
-    router.push('/dashboard');
   };
 
   if (authLoading || loading) return (
@@ -358,26 +421,53 @@ export default function TelemedicineSession() {
 
                   <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }} className="custom-scrollbar">
                       {activeTab === 'ai' && (
-                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                               <h4 style={{ fontSize: '0.9rem', fontWeight: 700 }}>Live AI Scribe (Transcription)</h4>
-                               {isAnalyzing && <span className="badge info" style={{ fontSize: '0.7rem' }}>Thinking...</span>}
-                            </div>
-                            <div style={{ padding: '16px', background: 'var(--bg-main)', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)', fontSize: '0.85rem', color: 'var(--text-main)', fontStyle: transcript ? 'normal' : 'italic', lineHeight: 1.6, maxHeight: '200px', overflowY: 'auto' }} className="custom-scrollbar">
-                               {transcript || 'Waiting for patient to speak (English only)...'}
-                            </div>
-                            
-                            {aiAnalysis && (
-                               <div className={`result-card urgency-${aiAnalysis.overallUrgency}`} style={{ opacity: 1, transform: 'none' }}>
-                                  <strong style={{ display: 'block', marginBottom: '8px', fontSize: '0.9rem' }}>AI Insights:</strong>
-                                  <p style={{ fontSize: '0.8rem', marginBottom: '12px', lineHeight: 1.4 }}>{aiAnalysis.aiSummary}</p>
-                                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                                     {aiAnalysis.results.map((r: any, idx: number) => (
-                                        <span key={idx} className="badge info" style={{ fontSize: '0.65rem' }}>Suggest: {r.specialty}</span>
-                                     ))}
+                         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+                            {/* Combined Transcription Feed */}
+                            <div style={{ padding: '16px', background: 'var(--bg-main)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--card-border)', maxHeight: '300px', overflowY: 'auto' }} className="custom-scrollbar">
+                               <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <div className="pulse-dot"></div> Live Clinical Scribe
+                               </div>
+                               <div style={{ fontSize: '0.85rem', lineHeight: 1.6, color: 'var(--text-main)' }}>
+                                  <div style={{ marginBottom: '8px', borderBottom: '1px solid var(--card-border)', paddingBottom: '4px' }}>
+                                     <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Doctor:</span> {transcript || '...'}
+                                  </div>
+                                  <div>
+                                     <span style={{ fontWeight: 700, color: 'var(--success)' }}>Patient:</span> {patientTranscript || '...'}
                                   </div>
                                </div>
-                            )}
+                            </div>
+
+                            {/* Risk Identification Panel */}
+                            <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(239, 68, 68, 0.1)' }}>
+                               <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--error)', textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                  <AlertCircle size={14} /> Intelligence: Risk identification
+                               </div>
+                               {detectedRisks.length > 0 ? (
+                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                                     {detectedRisks.map((risk, i) => (
+                                        <div key={i} style={{ padding: '8px 12px', background: 'white', borderRadius: '8px', borderLeft: '3px solid var(--error)', fontSize: '0.8rem', fontWeight: 600, boxShadow: 'var(--shadow-sm)' }}>
+                                           {risk}
+                                        </div>
+                                     ))}
+                                  </div>
+                               ) : (
+                                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Evaluating conversation for clinical red flags...</div>
+                               )}
+                            </div>
+
+                            {/* AI Summary Panel */}
+                            <div className="med-card" style={{ padding: '16px', height: 'auto', marginBottom: 0 }}>
+                               <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '12px' }}>Clinical Findings Summary</div>
+                               {isAnalyzing ? (
+                                  <div style={{ textAlign: 'center', padding: '20px' }}><div className="loading-spinner sm"></div></div>
+                               ) : aiAnalysis ? (
+                                  <div style={{ fontSize: '0.85rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
+                                     {aiAnalysis.aiSummary}
+                                  </div>
+                               ) : (
+                                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Analysis will appear as you discuss symptoms.</p>
+                               )}
+                            </div>
                          </div>
                       )}
 
@@ -437,104 +527,93 @@ export default function TelemedicineSession() {
       <Modal 
         isOpen={showPrescriptionModal} 
         onClose={() => setShowPrescriptionModal(false)} 
-        title="Live Prescription Issuance"
+        title="Issuing Clinical Treatment Plan"
+        width="800px"
       >
-         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-           {issuedQrCode ? (
-              <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                 <div style={{ width: '80px', height: '80px', background: 'var(--success-light)', color: 'var(--success)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px' }}>
-                    <CheckCircle size={40} />
-                 </div>
-                 <h3 style={{ fontSize: '1.2rem', fontWeight: 700, marginBottom: '8px' }}>Successfully Issued</h3>
-                 <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', marginBottom: '24px' }}>Verification ID: <span style={{ fontFamily: 'monospace', fontWeight: 700, color: 'var(--primary)' }}>{issuedPrescription?.verificationId}</span></p>
-                 
-                 <div style={{ background: 'white', padding: '16px', borderRadius: 'var(--radius-xl)', border: '4px solid var(--success-light)', display: 'inline-block', boxShadow: 'var(--shadow-lg)', marginBottom: '24px' }}>
-                    <img src={issuedQrCode} alt="Verification QR Code" style={{ width: '180px', height: '180px' }} />
-                 </div>
-                 
-                 <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                    <Button className="secondary" onClick={() => {
-                       setShowPrescriptionModal(false);
-                       setIssuedQrCode(null);
-                       setActiveTab('ai');
-                    }}>Done</Button>
-                    <a 
-                      href={`/verify/${issuedPrescription?.verificationId}`} 
-                      target="_blank" 
-                      rel="noreferrer"
-                      style={{ fontSize: '0.8rem', color: 'var(--primary)', fontWeight: 700, textDecoration: 'none' }}
-                    >
-                      View Public Verification Page
-                    </a>
-                 </div>
-              </div>
-           ) : (
-              <>
-                 <Input 
-                   label="Medication" 
-                   value={prescriptionData.medication} 
-                   onChange={(e) => setPrescriptionData({...prescriptionData, medication: e.target.value})}
-                   placeholder="e.g. Sumatriptan"
-                 />
-                 <div className="grid-2">
-                    <Input 
-                      label="Dosage" 
-                      value={prescriptionData.dosage} 
-                      onChange={(e) => setPrescriptionData({...prescriptionData, dosage: e.target.value})}
-                      placeholder="50mg"
-                    />
-                    <Input 
-                      label="Frequency" 
-                      value={prescriptionData.frequency} 
-                      onChange={(e) => setPrescriptionData({...prescriptionData, frequency: e.target.value})}
-                      placeholder="Once daily"
-                    />
-                 </div>
-                 <div className="med-input-group">
-                   <label className="med-label">Clinical Instructions</label>
-                   <textarea 
-                     className="med-input" 
-                     value={prescriptionData.instructions} 
-                     onChange={(e) => setPrescriptionData({...prescriptionData, instructions: e.target.value})}
-                     placeholder="Take at the onset of headache..."
-                     style={{ minHeight: '80px' }}
-                   />
-                 </div>
+         <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+            {issuedQrCode ? (
+               <div style={{ textAlign: 'center', padding: '40px' }}>
+                  <div style={{ width: '100px', height: '100px', background: 'var(--success-light)', color: 'var(--success)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
+                     <CheckCircle size={50} />
+                  </div>
+                  <h3 style={{ fontSize: '1.5rem', fontWeight: 800, marginBottom: '8px' }}>Treatment Plan Issued</h3>
+                  <p style={{ color: 'var(--text-secondary)', marginBottom: '32px' }}>The patient has received their digital prescription.</p>
+                  
+                  <div style={{ background: 'white', padding: '20px', borderRadius: '16px', display: 'inline-block', border: '1px solid var(--card-border)', boxShadow: 'var(--shadow-md)' }}>
+                    <img src={issuedQrCode} alt="Security Signature" style={{ width: '180px', height: '180px' }} />
+                  </div>
+                  <p style={{ marginTop: '16px', fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)' }}>Verification ID: {issuedPrescription?.verificationId}</p>
+                  <Button className="secondary" onClick={() => setShowPrescriptionModal(false)} style={{ marginTop: '32px' }}>Return to Session</Button>
+               </div>
+            ) : (
+               <>
+                  <div style={{ background: 'var(--bg-main)', padding: '16px', borderRadius: '12px', border: '1px solid var(--card-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                     <div>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase' }}>Patient Context</div>
+                        <div style={{ fontSize: '1rem', fontWeight: 700 }}>{appointment?.patientName}</div>
+                     </div>
+                     <div style={{ textAlign: 'right' }}>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--error)', textTransform: 'uppercase' }}>Allergies</div>
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: patientProfile?.allergies?.length ? 'var(--error)' : 'var(--text-muted)' }}>
+                           {patientProfile?.allergies?.join(', ') || 'None Known'}
+                        </div>
+                     </div>
+                  </div>
 
-                 <div className="med-input-group" style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--card-border)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px' }}>
-                       <label className="med-label" style={{ marginBottom: 0 }}>Digital Signature <span style={{ color: 'var(--error)' }}>*</span></label>
-                       <button 
-                         type="button"
-                         onClick={() => sigCanvas.current?.clear()} 
-                         style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem', textTransform: 'uppercase', fontWeight: 700, color: 'var(--text-muted)', background: 'none', border: 'none', cursor: 'pointer' }}
-                       >
-                         <Trash2 size={12} /> Clear Signature
-                       </button>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                       <h4 style={{ fontSize: '1rem', fontWeight: 800 }}>Regimen & Medications</h4>
+                       <Button className="primary sm" onClick={addMedication}>+ Add Medication</Button>
                     </div>
-                    <div style={{ border: '2px dashed var(--card-border)', borderRadius: 'var(--radius-md)', background: '#f8fafc', overflow: 'hidden', position: 'relative' }}>
-                       <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', pointerEvents: 'none', opacity: 0.2 }}>
-                          <span style={{ fontFamily: 'serif', fontSize: '2rem', color: 'var(--text-muted)', fontWeight: 700, transform: 'rotate(-10deg)' }}>Sign Here</span>
-                       </div>
-                       <SignatureCanvas 
-                         ref={sigCanvas}
-                         penColor="#1e293b"
-                         canvasProps={{style: {width: '100%', height: '140px', position: 'relative', zIndex: 10, cursor: 'crosshair'} }} 
-                       />
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', maxHeight: '300px', overflowY: 'auto', padding: '4px' }} className="custom-scrollbar">
+                       {medications.map((med) => (
+                          <div key={med.id} className="med-card" style={{ padding: '16px', border: med.warning ? '2px solid var(--error)' : '1px solid var(--card-border)', background: med.warning ? 'rgba(239, 68, 68, 0.05)' : 'white' }}>
+                             {med.warning && (
+                                <div style={{ marginBottom: '12px', padding: '12px', background: 'var(--error)', color: 'white', borderRadius: '8px', fontSize: '0.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px', boxShadow: '0 4px 12px rgba(239, 68, 68, 0.2)' }}>
+                                   <AlertCircle size={18} /> {med.warning}
+                                </div>
+                             )}
+                             <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 0.8fr 1fr 0.8fr 40px', gap: '12px' }}>
+                                <Input label="Medication" value={med.medication} onChange={(e) => updateMedication(med.id, 'medication', e.target.value)} placeholder="Name" />
+                                <Input label="Dosage" value={med.dosage} onChange={(e) => updateMedication(med.id, 'dosage', e.target.value)} placeholder="500mg" />
+                                <Input label="Freq" value={med.frequency} onChange={(e) => updateMedication(med.id, 'frequency', e.target.value)} placeholder="2x Daily" />
+                                <Input label="Duration" value={med.duration} onChange={(e) => updateMedication(med.id, 'duration', e.target.value)} placeholder="7 Days" />
+                                <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '8px' }}>
+                                   <button onClick={() => removeMedication(med.id)} style={{ color: 'var(--error)', background: 'transparent', border: 'none', cursor: 'pointer', padding: '8px' }}><Trash2 size={20}/></button>
+                                </div>
+                             </div>
+                          </div>
+                       ))}
                     </div>
-                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '8px', fontWeight: 500 }}>By signing above, you are legally authorizing the issuance of this prescription to the patient.</p>
-                 </div>
-                 
-                 <Button 
-                  className="primary" 
-                  style={{ width: '100%', padding: '16px', fontSize: '1rem', boxShadow: 'var(--shadow-md)' }} 
-                  onClick={handleIssuePrescription}
-                  disabled={isIssuing}
-                 >
-                   {isIssuing ? 'Issuing...' : 'Verify & Send to Patient'}
-                 </Button>
-              </>
-           )}
+                  </div>
+
+                  <div>
+                     <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Instructions & Advice</div>
+                     <textarea 
+                        value={prescriptionInstructions}
+                        onChange={(e) => setPrescriptionInstructions(e.target.value)}
+                        placeholder="Additional dietary advice or special instructions..."
+                        style={{ width: '100%', height: '80px', padding: '12px', borderRadius: '12px', border: '1px solid var(--card-border)', background: 'var(--bg-main)', fontSize: '0.9rem', resize: 'none' }}
+                     />
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr', gap: '20px', alignItems: 'flex-end' }}>
+                     <div>
+                        <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', marginBottom: '8px' }}>Digital Signature Authenticator</div>
+                        <div style={{ border: '2px dashed var(--card-border)', borderRadius: '12px', background: 'white' }}>
+                           <SignatureCanvas ref={sigCanvas} penColor="#1e293b" canvasProps={{ width: 450, height: 120, className: 'sigCanvas' }} />
+                        </div>
+                     </div>
+                     <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                        <Button className="secondary sm" onClick={() => sigCanvas.current?.clear()}>Clear Signature</Button>
+                        <Button className="primary" onClick={handleIssuePrescription} disabled={isIssuing} style={{ height: '56px', fontSize: '1rem' }}>
+                           {isIssuing ? 'Authenticating...' : 'Sign & Issue Plan'}
+                        </Button>
+                     </div>
+                  </div>
+               </>
+            )}
          </div>
       </Modal>
 
@@ -592,6 +671,20 @@ export default function TelemedicineSession() {
         .custom-scrollbar::-webkit-scrollbar { width: 5px; }
         .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
         .custom-scrollbar::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 10px; }
+
+        .pulse-dot {
+           width: 8px;
+           height: 8px;
+           background: #ef4444;
+           border-radius: 50%;
+           box-shadow: 0 0 0 rgba(239, 68, 68, 0.4);
+           animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+           0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+           70% { transform: scale(1); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+           100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
       `}</style>
       {/* Professional Connection Status Indicator */}
       <div style={{
@@ -606,10 +699,8 @@ export default function TelemedicineSession() {
           background: inCall ? '#10b981' : '#f59e0b',
           boxShadow: inCall ? '0 0 12px #10b981' : '0 0 12px #f59e0b'
         }} />
-        {inCall ? 'Global Global Secured Bridge' : 'Syncing Cloud...'}
+        {inCall ? 'Secured Medical Bridge Active' : 'Connecting to Cloud...'}
       </div>
     </div>
   );
 }
-
-

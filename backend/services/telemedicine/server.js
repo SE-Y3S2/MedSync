@@ -61,6 +61,11 @@ io.on('connection', (socket) => {
     socket.to(data.roomId).emit('ice_candidate', { candidate: data.candidate, sender: socket.id });
   });
 
+  // Generic Relay for Metadata (Transcripts, Risk Alerts, Multi-med sync)
+  socket.on('relay_message', (data) => {
+    socket.to(data.roomId).emit('relay_message', data);
+  });
+
   socket.on('disconnect', () => {
     console.log(`[Telemedicine] Disconnect: ${socket.id}`);
   });
