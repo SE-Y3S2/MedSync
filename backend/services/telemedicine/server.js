@@ -77,7 +77,12 @@ setInterval(() => {
 }, 5000);
 
 server.listen(port, () => {
+  const networkIp = getLocalIp();
+  const host = process.env.SIGNALING_HOST || networkIp;
   console.log(`\n🚀 Telemedicine Signaling Service Online`);
   console.log(`📍 Local:   http://localhost:${port}`);
-  console.log(`📡 Network: http://${getLocalIp()}:${port}\n`);
+  console.log(`📡 Network: http://${host}:${port}\n`);
+  if (host.startsWith('172.')) {
+     console.warn('⚠️ WARNING: Using Docker Internal IP. For cross-device testing, set the SIGNALING_HOST environment variable to your Host Machine IP.');
+  }
 });
