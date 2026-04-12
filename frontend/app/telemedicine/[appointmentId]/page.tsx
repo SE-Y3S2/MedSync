@@ -426,11 +426,21 @@ export default function TelemedicineSession() {
       }
     });
 
-    peer.on('error', (err) => {
-      // Ignore peer-unavailable errors since the dialer will retry until they join
-      if (err.type !== 'peer-unavailable') {
-        console.warn('Peer error:', err);
+    peer.on('error', (err: any) => {
+      if (err.type === 'peer-unavailable') {
+         // The patient isn't connected yet. Reset the active call so the dialer tries again on the next tick.
+         callActiveRef.current = null;
+         console.log('Participant not found. Retrying...');
+      } else {
+         console.warn('Peer error:', err);
       }
+    });
+
+    peer.on('disconnected', () => {
+       console.log('Lost connection to signaling server. Attempting to reconnect...');
+       if (peerRef.current && !peerRef.current.destroyed) {
+          peerRef.current.reconnect();
+       }
     });
   };
 
