@@ -52,6 +52,16 @@ io.on('connection', (socket) => {
   });
 });
 
+// Presence Watchdog: Log actual occupancy of active rooms to terminal
+setInterval(() => {
+  const rooms = io.sockets.adapter.rooms;
+  rooms.forEach((participants, roomId) => {
+    if (roomId.length > 20) { // Only log appointment rooms, not individual socket rooms
+      console.log(`[Monitor] Room ${roomId}: ${participants.size} online participants.`);
+    }
+  });
+}, 5000);
+
 server.listen(port, () => {
   console.log(`Telemedicine Stack Online: Port ${port}`);
 });
