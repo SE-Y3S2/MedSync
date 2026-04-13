@@ -1,8 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(ls -la /c/Users/LENOVO/Desktop/MedSync/k8s/*/)",
-      "Bash(xargs head:*)"
-    ]
-  }
-}
