@@ -14,26 +14,20 @@ const mongoOpts = {
   socketTimeoutMS: 45000,
   family: 4,
 };
-const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/medsync';
 
-if (!process.env.MONGO_URI) {
-  console.warn('[payment] MONGO_URI is not set; using local default.');
-}
-
-const startServer = async () => {
-  try {
-    const conn = await mongoose.connect(mongoUri, mongoOpts);
-    console.log(`[Payment] MongoDB Connected: ${conn.connection.host}`);
-  } catch (err) {
-    console.error(`[Payment] DB Error: ${err.message}`);
-  }
+const start = async () => {
+  const uri = process.env.MONGO_URI;
+  if (!uri) throw new Error('MONGO_URI is not set');
+  const conn = await mongoose.connect(uri, mongoOpts);
+  console.log(`[payment] MongoDB connected: ${conn.connection.host}`);
 
   await connectProducer();
-  await startConsumer();
+  startConsumer().catch((err) => console.error('[payment] consumer crashed:', err));
 
-  app.listen(PORT, () => {
-    console.log(`Payment Service running on port ${PORT}`);
-  });
+  app.listen(PORT, () => console.log(`[payment] listening on ${PORT}`));
 };
 
-startServer();
+start().catch((err) => {
+  console.error('[payment] failed to start:', err);
+  process.exit(1);
+});

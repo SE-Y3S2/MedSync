@@ -3,35 +3,48 @@ const router = express.Router();
 const doctorController = require('../controllers/doctorController');
 const jwt = require('jsonwebtoken');
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-    console.error('[Doctor Management] CRITICAL: JWT_SECRET not found in environment.');
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET is not set');
 }
 
 const auth = (req, res, next) => {
-    try {
-        const token = req.headers.authorization.split(' ')[1];
-        req.user = jwt.verify(token, JWT_SECRET);
-        next();
-    } catch (err) {
-        return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Authorization token required' });
     }
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const id = decoded.userId || decoded.id || decoded.doctorId;
+    req.user = {
+      id,
+      doctorId: decoded.doctorId || (decoded.role === 'doctor' ? id : undefined),
+      email: decoded.email,
+      role: decoded.role,
+    };
+    next();
+  } catch {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
 };
 
+// Registration / login
 router.post('/register', doctorController.registerDoctor);
 router.post('/login', doctorController.login);
+
+// Prescriptions — verify is public (QR scan), issue is doctor-only
+router.get('/prescriptions/verify/:verificationId', doctorController.getPrescriptionByVerifyId);
+router.post('/prescriptions', auth, doctorController.issuePrescription);
+
+// Doctor lookup
 router.get('/', doctorController.listDoctors);
 router.get('/:id', doctorController.getDoctor);
 router.put('/:id', auth, doctorController.updateDoctor);
 router.get('/:id/analytics', auth, doctorController.getAnalytics);
 
 // Availability
-router.get('/:id/availability', auth, doctorController.getAvailability);
+router.get('/:id/availability', doctorController.getAvailability);
 router.post('/:id/availability', auth, doctorController.addAvailability);
 router.delete('/:id/availability/:slotId', auth, doctorController.deleteAvailability);
-
-// Prescription Routes
-router.post('/prescriptions', auth, doctorController.issuePrescription);
-router.get('/prescriptions/verify/:verificationId', doctorController.getPrescriptionByVerifyId);
 
 module.exports = router;

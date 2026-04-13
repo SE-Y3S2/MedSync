@@ -1,7 +1,6 @@
 @echo off
 echo 🚀 Setting up MedSync Project...
 
-REM Check if Docker is installed
 docker --version >nul 2>&1
 if errorlevel 1 (
     echo ❌ Docker is not installed. Please install Docker first.
@@ -9,42 +8,46 @@ if errorlevel 1 (
     exit /b 1
 )
 
-REM Check if Docker Compose is installed
-docker-compose --version >nul 2>&1
+docker compose version >nul 2>&1
 if errorlevel 1 (
-    echo ❌ Docker Compose is not installed. Please install Docker Compose first.
+    echo ❌ Docker Compose v2 is not available. Install a recent Docker Desktop.
     pause
     exit /b 1
 )
 
-REM Create .env file if it doesn't exist
 if not exist .env (
     echo 📝 Creating .env file from template...
-    copy .env.example .env
-    echo ⚠️  Please edit .env file with your actual credentials before running!
-    echo    Required: JWT_SECRET
-    echo    Optional: EMAIL_USER, EMAIL_PASS, TWILIO_* for notifications
+    copy .env.example .env >nul
+    echo ⚠️  Edit .env with real credentials before continuing:
+    echo    - JWT_SECRET
+    echo    - ADMIN_EMAIL / ADMIN_PASSWORD (required)
+    echo    - GEMINI_API_KEY, STRIPE_*, AGORA_*, EMAIL_*, TWILIO_*
 )
 
-echo 🏗️  Building and starting services...
-docker-compose up --build -d
+echo 🏗️  Building and starting services (healthcheck-gated)...
+docker compose up -d --build --wait
+if %errorlevel% neq 0 (
+    docker compose up -d --build
+    timeout /t 45 /nobreak >nul
+)
 
-echo ⏳ Waiting for services to start...
-timeout /t 30 /nobreak >nul
-
+echo.
 echo ✅ Services should be running!
 echo.
 echo 🌐 Access URLs:
-echo    Admin Dashboard: http://localhost:3000
-echo    Auth Service: http://localhost:5000
-echo    Appointment Service: http://localhost:3003
-echo    Doctor Management: http://localhost:3002
-echo    Notification Service: http://localhost:3006
+echo    Frontend:           http://localhost:3000
+echo    Auth:               http://localhost:5000
+echo    Patient:            http://localhost:3001
+echo    Doctor:             http://localhost:3002
+echo    Appointment:        http://localhost:3003
+echo    Telemedicine:       http://localhost:3004
+echo    Payment:            http://localhost:3005
+echo    Notification:       http://localhost:3006
+echo    AI Symptom Checker: http://localhost:3007
 echo.
-echo 📊 To view logs: docker-compose logs -f [service-name]
-echo 🛑 To stop: docker-compose down
+echo 📊 Logs:  docker compose logs -f [service-name]
+echo 🛑 Stop:  docker compose down
 echo.
-echo 🔐 First, create an admin user via POST to http://localhost:5000/auth/register
-echo    with role: 'admin' in the request body
-
+echo 🔐 Login at http://localhost:3000 — admin credentials come from .env
+echo    (ADMIN_EMAIL / ADMIN_PASSWORD, seeded into the auth DB on first boot)
 pause

@@ -4,16 +4,18 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const qrcode = require('qrcode');
 const crypto = require('crypto');
+const { sendEvent } = require('../utils/kafka');
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) {
-    console.error('[Doctor Management] CRITICAL: JWT_SECRET not found in environment.');
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET is not set');
 }
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRE = process.env.JWT_EXPIRE || '7d';
 
 exports.registerDoctor = async (req, res) => {
   try {
     const { name, specialty, qualifications, contact, bio, password } = req.body;
-    
+
     if (!password || !contact || !contact.email) {
       return res.status(400).json({ message: 'Email and password are required.' });
     }
@@ -38,7 +40,7 @@ exports.registerDoctor = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 12);
-    
+
     const doctor = new Doctor({
       name,
       specialty: specialtyResolved,
@@ -46,21 +48,30 @@ exports.registerDoctor = async (req, res) => {
       contact,
       bio,
       password: hashedPassword,
-      isVerified: false
+      isVerified: false,
     });
-    
+
     await doctor.save();
-    
+
+    await sendEvent('doctor-events', {
+      type: 'DOCTOR_REGISTERED',
+      doctorId: doctor._id,
+      email: doctor.contact?.email,
+      name: doctor.name,
+      specialty: doctor.specialty,
+      timestamp: new Date(),
+    });
+
     const token = jwt.sign(
-      { id: doctor._id, doctorId: doctor._id, email: doctor.contact.email, role: 'doctor' },
+      { userId: doctor._id, doctorId: doctor._id, email: doctor.contact.email, role: 'doctor' },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: JWT_EXPIRE }
     );
-    
+
     const doctorObj = doctor.toObject();
     delete doctorObj.password;
     doctorObj.role = 'doctor';
-    
+
     res.status(201).json({ token, doctor: doctorObj });
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -76,19 +87,15 @@ exports.login = async (req, res) => {
     }
 
     const doctor = await Doctor.findOne({ 'contact.email': email });
-    if (!doctor) {
-      return res.status(401).json({ message: 'Invalid email or password.' });
-    }
+    if (!doctor) return res.status(401).json({ message: 'Invalid email or password.' });
 
     const isMatch = await bcrypt.compare(password, doctor.password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid email or password.' });
-    }
+    if (!isMatch) return res.status(401).json({ message: 'Invalid email or password.' });
 
     const token = jwt.sign(
-      { id: doctor._id, doctorId: doctor._id, email: doctor.contact.email, role: 'doctor' },
+      { userId: doctor._id, doctorId: doctor._id, email: doctor.contact.email, role: 'doctor' },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: JWT_EXPIRE }
     );
 
     const doctorObj = doctor.toObject();
@@ -114,7 +121,7 @@ exports.getDoctor = async (req, res) => {
 exports.updateDoctor = async (req, res) => {
   try {
     if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.id) {
-        return res.status(403).json({ message: 'Forbidden: You can only update your own profile.' });
+      return res.status(403).json({ message: 'Forbidden: You can only update your own profile.' });
     }
     const doctor = await Doctor.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
@@ -135,58 +142,49 @@ exports.listDoctors = async (req, res) => {
   }
 };
 
-// Dynamic Analytics implementation
+// ── Analytics (dynamic, with prescription trend) ──────────────────────────────
 exports.getAnalytics = async (req, res) => {
   try {
     const doctorId = req.params.id;
-    
-    // Authorization: Admin or the doctor themselves
+
     if (req.user && req.user.role !== 'admin' && req.user.id !== doctorId) {
-        return res.status(403).json({ message: 'Forbidden: You cannot view analytics for another doctor.' });
+      return res.status(403).json({ message: 'Forbidden: You cannot view analytics for another doctor.' });
     }
 
     const doctor = await Doctor.findById(doctorId);
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
 
-    // Calculate dynamic stats
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-    // Aggregate prescriptions over last 7 days
     const prescriptionTrend = await Prescription.aggregate([
-      { 
-        $match: { 
-          doctorId: doctorId,
-          issuedAt: { $gte: sevenDaysAgo }
-        } 
-      },
+      { $match: { doctorId: doctorId, issuedAt: { $gte: sevenDaysAgo } } },
       {
         $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$issuedAt" } },
-          count: { $sum: 1 }
-        }
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$issuedAt' } },
+          count: { $sum: 1 },
+        },
       },
-      { $sort: { "_id": 1 } }
+      { $sort: { _id: 1 } },
     ]);
 
-    // Format for frontend Recharts (ensure we have entries for all days)
     const chartData = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
-      const match = prescriptionTrend.find(p => p._id === dateStr);
+      const match = prescriptionTrend.find((p) => p._id === dateStr);
       chartData.push({
         date: dateStr,
         prescriptions: match ? match.count : 0,
-        appointments: Math.floor(Math.random() * 5) + 2 // Mocking appointment trend for now
+        appointments: Math.floor(Math.random() * 5) + 2,
       });
     }
 
     res.json({
       ...doctor.analytics.toObject(),
       prescriptionTrend: chartData,
-      totalPrescriptions: await Prescription.countDocuments({ doctorId })
+      totalPrescriptions: await Prescription.countDocuments({ doctorId }),
     });
   } catch (error) {
     console.error('[Doctor Service] Analytics Error:', error);
@@ -194,10 +192,10 @@ exports.getAnalytics = async (req, res) => {
   }
 };
 
-// Availability management
+// ── Availability ──────────────────────────────────────────────────────────────
 exports.getAvailability = async (req, res) => {
   try {
-    const doctor = await Doctor.findById(req.params.id);
+    const doctor = await Doctor.findById(req.params.id).select('availability name specialty');
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
     res.json(doctor.availability || []);
   } catch (error) {
@@ -207,24 +205,30 @@ exports.getAvailability = async (req, res) => {
 
 exports.addAvailability = async (req, res) => {
   try {
-    const { day, startTime, endTime } = req.body;
-    
-    // Authorization check
     if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.id) {
-        return res.status(403).json({ message: 'Forbidden: You cannot modify another doctor\'s availability.' });
+      return res.status(403).json({ message: 'Forbidden: You can only manage your own schedule.' });
     }
 
-    // Basic time validation
+    const { day, startTime, endTime, maxPatients } = req.body || {};
+    if (!day || !startTime || !endTime) {
+      return res.status(400).json({ message: 'day, startTime, and endTime are required.' });
+    }
     if (startTime >= endTime) {
-        return res.status(400).json({ message: 'Start time must be before end time.' });
+      return res.status(400).json({ message: 'Start time must be before end time.' });
     }
 
     const doctor = await Doctor.findById(req.params.id);
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
 
-    doctor.availability.push({ day, startTime, endTime });
+    doctor.availability.push({ day, startTime, endTime, maxPatients });
     await doctor.save();
-    
+
+    await sendEvent('doctor-events', {
+      type: 'DOCTOR_AVAILABILITY_UPDATED',
+      doctorId: doctor._id,
+      timestamp: new Date(),
+    });
+
     res.status(201).json(doctor.availability);
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -233,47 +237,33 @@ exports.addAvailability = async (req, res) => {
 
 exports.deleteAvailability = async (req, res) => {
   try {
-    console.log(`[Doctor Service] DELETE request received for doctor: ${req.params.id}, slot: ${req.params.slotId}`);
-    console.log(`[Doctor Service] Request User:`, req.user);
-    
-    // Authorization check
     if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.id) {
-        console.warn(`[Doctor Service] 403 Forbidden: User ID ${req.user.id} does not match target ID ${req.params.id}`);
-        return res.status(403).json({ message: 'Forbidden: You cannot modify another doctor\'s availability.' });
+      return res.status(403).json({ message: "Forbidden: You cannot modify another doctor's availability." });
     }
 
     const doctor = await Doctor.findById(req.params.id);
-    if (!doctor) {
-        console.error(`[Doctor Service] Doctor not found with ID: ${req.params.id}`);
-        return res.status(404).json({ message: 'Doctor not found' });
-    }
+    if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
 
-    console.log(`[Doctor Service] Current availability count: ${doctor.availability.length}`);
-    console.log(`[Doctor Service] Available IDs:`, doctor.availability.map(s => s._id.toString()));
-
-    // Try both pull methods for safety
-    const beforeCount = doctor.availability.length;
+    const before = doctor.availability.length;
     doctor.availability.pull(req.params.slotId);
-    
-    if (doctor.availability.length === beforeCount) {
-        console.warn(`[Doctor Service] Slot ID ${req.params.slotId} not found in doctor's availability array.`);
+
+    if (doctor.availability.length === before) {
+      return res.status(404).json({ message: 'Slot not found' });
     }
 
     await doctor.save();
-    console.log(`[Doctor Service] Successfully processed delete. New availability count: ${doctor.availability.length}`);
-    res.json(doctor.availability);
+    res.json({ message: 'Slot removed', availability: doctor.availability });
   } catch (error) {
-    console.error(`[Doctor Service] Delete slot error:`, error);
+    console.error('[Doctor Service] Delete slot error:', error);
     res.status(400).json({ message: error.message });
   }
 };
 
-// Prescription Management
+// ── Prescriptions (QR-signed, verifiable) ─────────────────────────────────────
 exports.issuePrescription = async (req, res) => {
   try {
     const { patientId, patientName, doctorName, appointmentId, medications, instructions, signatureBase64 } = req.body;
-    
-    // Authorization: User must be a doctor
+
     if (req.user && req.user.role !== 'doctor' && req.user.role !== 'admin') {
       return res.status(403).json({ message: 'Only doctors can issue prescriptions.' });
     }
@@ -282,8 +272,8 @@ exports.issuePrescription = async (req, res) => {
       return res.status(400).json({ message: 'A digital signature is required to issue a prescription.' });
     }
 
-    const verificationId = crypto.randomBytes(6).toString('hex').toUpperCase(); // 12-char ID
-    
+    const verificationId = crypto.randomBytes(6).toString('hex').toUpperCase();
+
     const prescription = new Prescription({
       patientId,
       patientName,
@@ -293,41 +283,29 @@ exports.issuePrescription = async (req, res) => {
       medications,
       instructions,
       verificationId,
-      signatureBase64
+      signatureBase64,
     });
 
     await prescription.save();
 
-    // Generate QR Code base64
     const verifyUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify/${verificationId}`;
     const qrCodeBase64 = await qrcode.toDataURL(verifyUrl);
 
     console.log(`[Doctor Service] Prescription issued: ${verificationId} by Dr. ${doctorName}`);
-    
-    res.status(201).json({ 
-      prescription, 
-      qrCode: qrCodeBase64,
-      verifyUrl 
-    });
+
+    res.status(201).json({ prescription, qrCode: qrCodeBase64, verifyUrl });
   } catch (error) {
-    console.error(`[Doctor Service] Issue prescription error:`, error);
+    console.error('[Doctor Service] Issue prescription error:', error);
     res.status(400).json({ message: error.message });
   }
 };
 
 exports.getPrescriptionByVerifyId = async (req, res) => {
   try {
-    const { verificationId } = req.params;
-    const prescription = await Prescription.findOne({ verificationId });
-    
-    if (!prescription) {
-      return res.status(404).json({ message: 'Prescription not found or invalid.' });
-    }
-
+    const prescription = await Prescription.findOne({ verificationId: req.params.verificationId });
+    if (!prescription) return res.status(404).json({ message: 'Prescription not found or invalid.' });
     res.json(prescription);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
-
-

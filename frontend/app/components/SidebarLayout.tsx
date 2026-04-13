@@ -6,9 +6,10 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ToastContainer } from './UI';
 import { useAuth } from '../context/AuthContext';
 
-import { 
-  Shield, UserCog, Stethoscope, Clock, Calendar, Home, 
-  Search, CalendarClock, User, FileText, Bot, Video, LayoutDashboard, CreditCard, LogOut 
+import {
+  UserCog, Stethoscope, Clock, Calendar, Home,
+  Search, CalendarClock, User, FileText, Bot, Video, LayoutDashboard,
+  Users, LineChart, CreditCard, LogOut,
 } from 'lucide-react';
 
 const getNavItems = (role?: string) => {
@@ -16,8 +17,10 @@ const getNavItems = (role?: string) => {
     return [
       { href: '/admin', label: 'Admin Dashboard', icon: <LayoutDashboard size={20} /> },
       { href: '/admin/doctors', label: 'Manage Doctors', icon: <UserCog size={20} /> },
+      { href: '/admin/patients', label: 'Manage Patients', icon: <Users size={20} /> },
       { href: '/admin/appointments', label: 'All Appointments', icon: <Calendar size={20} /> },
-      { href: '/admin/payments', label: 'System Payments', icon: <CreditCard size={20} /> }
+      { href: '/admin/payments', label: 'System Payments', icon: <CreditCard size={20} /> },
+      { href: '/admin/oversight', label: 'Platform Oversight', icon: <LineChart size={20} /> },
     ];
   }
   if (role === 'doctor') {
@@ -25,7 +28,7 @@ const getNavItems = (role?: string) => {
       { href: '/doctor', label: 'Doctor Dashboard', icon: <Stethoscope size={20} /> },
       { href: '/doctor/availability', label: 'My Schedule', icon: <Clock size={20} /> },
       { href: '/doctor/appointments', label: 'Appointments', icon: <Calendar size={20} /> },
-      { href: '/telemedicine', label: 'Virtual Meetings', icon: <Video size={20} /> }
+      { href: '/telemedicine', label: 'Virtual Meetings', icon: <Video size={20} /> },
     ];
   }
   return [

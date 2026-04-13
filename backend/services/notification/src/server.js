@@ -1,20 +1,14 @@
-const express = require('express');
-const app = express();
+const app = require('./app');
+const { connectConsumer } = require('./kafka/consumer');
+
 const port = process.env.PORT || 3006;
-const { connectConsumer } = require('./src/kafka/consumer');
 
-app.use(express.json());
-
-app.get('/', (req, res) => {
-  res.send('Notification Service is running');
-});
-
-const startServer = async () => {
+const start = async () => {
   await connectConsumer();
-  
-  app.listen(port, () => {
-    console.log(`Notification Service listening on port ${port}`);
-  });
+  app.listen(port, () => console.log(`[notification] listening on ${port}`));
 };
 
-startServer();
+start().catch((err) => {
+  console.error('[notification] failed to start:', err);
+  process.exit(1);
+});

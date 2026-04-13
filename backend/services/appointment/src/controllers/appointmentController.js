@@ -252,6 +252,72 @@ exports.updatePaymentStatus = async (req, res, next) => {
     }
 };
 
+// ── Reschedule Appointment ────────────────────────────────────────────────────
+exports.rescheduleAppointment = async (req, res, next) => {
+    try {
+        const { slotDate, slotTime } = req.body || {};
+        if (!slotDate || !slotTime) {
+            return res.status(400).json({ message: 'slotDate and slotTime are required.' });
+        }
+
+        const appointment = await Appointment.findById(req.params.id);
+        if (!appointment) return res.status(404).json({ message: 'Appointment not found' });
+
+        if (req.user && req.user.role !== 'admin' && req.user.id !== appointment.patientId && req.user.id !== appointment.doctorId) {
+            return res.status(403).json({ message: 'Forbidden: you cannot reschedule this appointment.' });
+        }
+
+        if (!['pending', 'confirmed'].includes(appointment.status)) {
+            return res.status(400).json({ message: 'Only pending or confirmed appointments can be rescheduled.' });
+        }
+
+        const conflict = await Appointment.findOne({
+            _id: { $ne: appointment._id },
+            doctorId: appointment.doctorId,
+            slotDate,
+            slotTime,
+            status: { $in: ['pending', 'confirmed', 'completed'] },
+        });
+        if (conflict) {
+            return res.status(409).json({ message: 'This slot is already booked.' });
+        }
+
+        appointment.slotDate = slotDate;
+        appointment.slotTime = slotTime;
+        await appointment.save();
+
+        await sendEvent('appointment-events', {
+            type: 'APPOINTMENT_RESCHEDULED',
+            data: {
+                appointmentId: appointment._id,
+                patientEmail: appointment.patientEmail,
+                doctorName: appointment.doctorName,
+                date: slotDate,
+                time: slotTime,
+            },
+        });
+
+        res.json(appointment);
+    } catch (error) {
+        next(error);
+    }
+};
+
+// ── Admin: All Appointments ──────────────────────────────────────────────────
+exports.listAllAppointments = async (req, res, next) => {
+    try {
+        if (req.user?.role !== 'admin') {
+            return res.status(403).json({ message: 'Admin access required.' });
+        }
+        const { status } = req.query;
+        const filter = status ? { status } : {};
+        const appointments = await Appointment.find(filter).sort({ createdAt: -1 }).limit(500);
+        res.json(appointments);
+    } catch (error) {
+        next(error);
+    }
+};
+
 // ── Cancel Appointment ────────────────────────────────────────────────────────
 exports.cancelAppointment = async (req, res, next) => {
     try {

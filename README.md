@@ -1,24 +1,28 @@
 # MedSync: AI-Enabled Smart Healthcare Platform
 
-MedSync is a high-availability, cloud-native healthcare ecosystem built with a microservices architecture. It streamlines patient-doctor interactions through AI-driven diagnostics, real-time telemedicine, and secure payment processing.
+MedSync is a cloud-native healthcare ecosystem built with a microservices architecture. It streamlines patient-doctor interactions through AI-driven diagnostics, real-time telemedicine, and secure payment processing.
 
-This project is the official implementation for the **SE3020 – Distributed Systems Assignment 1 (2026)**.
+Implementation for **SE3020 – Distributed Systems Assignment 1 (2026)**.
 
 ---
 
 ## 🏛️ System Architecture
 
-MedSync consists of **8 core microservices** and a **Next.js Frontend**, all containerized and ready for orchestration.
+MedSync consists of **8 backend microservices** and a **Next.js frontend**, all containerized.
 
-### Core Services:
-*   **Auth Service (Port 5000)**: Unified JWT-based authentication for Patients, Doctors, and Admins.
-*   **Patient Management (Port 3001)**: Digital Health Records (PHR), document uploads, and medical history.
-*   **Doctor Management (Port 3002)**: Profile verification, availability scheduling, and analytics.
-*   **Appointment Service (Port 3003)**: Real-time booking engine with specialty-based search.
-*   **Telemedicine Service (Port 3004)**: Secure video consultations via Agora SDK and Redis signaling.
-*   **Payment Service (Port 3005)**: Financial gateway integrated with Stripe Checkout.
-*   **Notification Service (Port 3006)**: Event-driven alerts (Email/SMS) powered by Apache Kafka.
-*   **AI Symptom Checker (Port 3007)**: Preliminary diagnostic engine using Google Gemini AI.
+| Service | Port | Role |
+| :--- | :--- | :--- |
+| **Auth** | 5000 | Unified JWT login/registration + admin seeding |
+| **Patient Management** | 3001 | Digital health records, document uploads |
+| **Doctor Management** | 3002 | Doctor profiles, verification, analytics |
+| **Appointment** | 3003 | Booking engine with specialty search |
+| **Telemedicine** | 3004 | Agora-powered video sessions + Redis signaling |
+| **Payment** | 3005 | Stripe Checkout integration |
+| **Notification** | 3006 | Event-driven email/SMS via Kafka |
+| **AI Symptom Checker** | 3007 | Preliminary diagnostics via Google Gemini |
+| **Frontend** | 3000 | Next.js 16 + React 19 dashboard |
+
+Shared infrastructure: MongoDB, Redis, Kafka, Zookeeper — all provisioned by Compose/k8s.
 
 ---
 
@@ -26,66 +30,69 @@ MedSync consists of **8 core microservices** and a **Next.js Frontend**, all con
 
 | Category | Technologies |
 | :--- | :--- |
-| **Frontend** | React, Next.js 14, TypeScript, CSS3 |
-| **Backend** | Node.js, Express, Socket.io |
-| **Data** | MongoDB (Primary), Redis (Session Cache) |
-| **Messaging** | Apache Kafka (Event Streaming) |
-| **Infrastructure** | Docker, Docker Compose, Kubernetes (K8s) |
-| **External APIs** | Stripe, Agora, Google Gemini, Twilio |
+| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS v4 |
+| **Backend** | Node.js 20, Express, Mongoose, kafkajs |
+| **Data** | MongoDB 6, Redis 7 |
+| **Messaging** | Apache Kafka (Confluent 7.4) |
+| **Infra** | Docker Compose, Kubernetes (Kustomize) |
+| **External APIs** | Stripe, Agora, Google Gemini, Twilio, Nodemailer |
 
 ---
 
-## ⚙️ Configuration (Environment Variables)
+## ⚙️ Configuration (Centralized `.env`)
 
-The project now uses a **Centralized Environment Configuration**. You only need to manage variables in the root directory.
+**One `.env` file at the repo root drives the entire stack** — Compose injects it into every service via `env_file: ./.env`, including the frontend's `NEXT_PUBLIC_*` variables.
 
-1.  **Initialize**: Rename [`.env.example`](file:///c:/Users/LENOVO/Desktop/MedSync/.env.example) to `.env`.
-2.  **Fill API Keys**: 
-    *   `GEMINI_API_KEY`: Get from [Google AI Studio](https://aistudio.google.com/).
-    *   `STRIPE_SECRET_KEY`: Get from [Stripe Dashboard](https://dashboard.stripe.com/).
-    *   `AGORA_APP_ID`: Get from [Agora Console](https://console.agora.io/).
+1. Copy the template: `cp .env.example .env` (the startup scripts do this automatically if missing).
+2. Fill in API keys:
+    * `JWT_SECRET` — generate with `openssl rand -base64 48`
+    * `GEMINI_API_KEY` — [Google AI Studio](https://aistudio.google.com/)
+    * `STRIPE_SECRET_KEY` + `STRIPE_WEBHOOK_SECRET` — [Stripe Dashboard](https://dashboard.stripe.com/)
+    * `AGORA_APP_ID` + `AGORA_APP_CERTIFICATE` — [Agora Console](https://console.agora.io/)
+    * `EMAIL_USER` / `EMAIL_PASS` — Gmail app password
+    * `TWILIO_SID` / `TWILIO_AUTH_TOKEN` / `TWILIO_FROM` — optional; SMS falls back to console log without them
+    * `ADMIN_EMAIL` / `ADMIN_PASSWORD` — seeded into auth DB on first boot
+
+No per-service `.env` files are needed or supported.
 
 ---
 
 ## 🚀 One-Command Deployment
 
-### Option A: Docker Compose (Quickest)
-Best for local development and demonstration.
-*   **Windows**: Double-click [`start-medsync.bat`](file:///c:/Users/LENOVO/Desktop/MedSync/start-medsync.bat)
-*   **Linux/Mac**: Run `chmod +x start-medsync.sh && ./start-medsync.sh`
+### Option A — Docker Compose (local dev)
+* **Windows:** double-click `start-medsync.bat`
+* **Linux/Mac:** `chmod +x start-medsync.sh && ./start-medsync.sh`
 
-### Option B: Kubernetes (Orchestrasted)
-Best for production simulation and assignment requirements.
-1.  Ensure you have a k8s cluster running (Docker Desktop K8s or Minikube).
-2.  **Deploy**:
-    *   **Windows**: Run [`run-k8s.bat`](file:///c:/Users/LENOVO/Desktop/MedSync/run-k8s.bat)
-    *   **Linux/Mac**: Run `./run-k8s.sh`
-3.  **Local Mapping**: Add the following to your `hosts` file:
-    ```bash
-    127.0.0.1 medsync.local
-    ```
-4.  **Access**: Visit `http://medsync.local`
+The script spins up MongoDB, Redis, Kafka+Zookeeper, all 8 services, and the frontend. Health checks gate dependency startup so no sleep hacks.
+
+### Option B — Kubernetes
+1. Edit [`k8s/secrets.yaml`](k8s/secrets.yaml) and replace the placeholder `JWT_SECRET` with a real value.
+2. Ensure a cluster is running (Docker Desktop k8s or Minikube).
+3. Deploy: `./run-k8s.sh` (or `run-k8s.bat`) — this runs `kubectl apply -k k8s/`.
+4. Map `127.0.0.1 medsync.local` in your hosts file.
+5. Browse: `http://medsync.local`.
 
 ---
 
-## 🔑 User Role Credentials
+## 🔑 Login
 
-| Role | Email | Password | Dashboard URL |
-| :--- | :--- | :--- | :--- |
-| **Administrator** | `admin@medsync.com` | `admin123` | `/admin` |
-| **Doctor** | (Register first) | (Your Choice) | `/doctor` |
-| **Patient** | (Register first) | (Your Choice) | `/` (Home) |
+| Role | Credentials | Dashboard |
+| :--- | :--- | :--- |
+| **Admin** | From `.env` (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) | `/admin` |
+| **Doctor** | Register first at `/register` | `/doctor` |
+| **Patient** | Register first at `/register` | `/patient` |
 
 ---
 
 ## 📋 Assignment Deliverables Checklist
 
-- [x] **Microservices**: All 8 services containerized.
-- [x] **Advanced Tech**: Kafka, Redis, and Gemini AI integration.
-- [x] **Documentation**: Automatic README, Startup Scripts, and K8s manifests.
-- [x] **Secure Access**: JWT cross-service verification.
-- [x] **UI/UX**: Premium medical-themed dashboard.
+- [x] **8 microservices**, all containerized
+- [x] **Advanced tech**: Kafka event bus, Redis cache, Gemini AI, Stripe, Agora
+- [x] **Kubernetes manifests** with Ingress, Secrets, and health-gated dependencies
+- [x] **Unified JWT auth** via dedicated auth service
+- [x] **Centralized config** — single root `.env`
+- [x] **Startup scripts** for both Compose and k8s
 
 ---
 
-*Developed for SE3020 Distributed Systems (BSC Information Technology).*
+*Developed for SE3020 Distributed Systems (BSc Information Technology).*

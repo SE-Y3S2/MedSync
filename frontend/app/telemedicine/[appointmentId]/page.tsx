@@ -157,10 +157,46 @@ export default function TelemedicineSession() {
   }, [jitsiLoaded, appointment, user, appointmentId]);
 
   useEffect(() => {
-    if (!authLoading && user) {
-      loadData();
-    }
-  }, [authLoading, user]);
+    if (authLoading || !user) return;
+
+    const loadData = async () => {
+      try {
+        setLoading(true);
+        const apptId = appointmentId as string;
+
+        let appt: any = null;
+        try {
+          appt = await appointmentApi.getAppointment(apptId);
+          setAppointment(appt);
+        } catch {
+          appt = null;
+        }
+
+        try {
+          const sessData = await telemedicineApi.getSession(apptId);
+          setSession(sessData);
+        } catch {
+          if (!appt) {
+            setSession(null);
+            return;
+          }
+          const sessData = await telemedicineApi.createSession({
+            appointmentId: apptId,
+            doctorId: appt.doctorId,
+            patientId: appt.patientId,
+          });
+          setSession(sessData);
+        }
+      } catch (err) {
+        console.error(err);
+        setSession(null);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, [authLoading, user, appointmentId]);
 
   useEffect(() => {
     let interval: any;

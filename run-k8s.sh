@@ -2,26 +2,34 @@
 
 # MedSync Kubernetes Deployment Script
 
+set -e
+
 echo "🚀 Starting MedSync Orchestration on Kubernetes..."
 
-# Check if kubectl is installed
-if ! command -v kubectl &> /dev/null
-then
+if ! command -v kubectl &> /dev/null; then
     echo "❌ Error: kubectl could not be found. Please install it to proceed."
     exit 1
 fi
 
-# Apply the entire Kubernetes configuration using Kustomize
-echo "📦 Applying manifests from /k8s..."
+if grep -q "REPLACE_WITH_STRONG_RANDOM_STRING" k8s/secrets.yaml 2>/dev/null; then
+    echo "❌ k8s/secrets.yaml still contains the placeholder JWT_SECRET."
+    echo "   Edit it first — the auth pod will crash-loop without a real value."
+    echo "   Generate one with: openssl rand -base64 48"
+    exit 1
+fi
+
+echo "📦 Applying manifests from k8s/..."
 kubectl apply -k k8s/
 
-echo "⏳ Waiting for pods to initialize in 'medsync' namespace..."
-kubectl get pods -n medsync
+echo "⏳ Waiting for deployments to roll out (up to 3 minutes)..."
+kubectl rollout status deployment --all -n medsync --timeout=180s || true
 
 echo "--------------------------------------------------------"
-echo "✅ Deployment initiated!"
+echo "✅ Deployment ready!"
+echo "--------------------------------------------------------"
+kubectl get pods -n medsync
 echo "--------------------------------------------------------"
 echo "🌐 Access the platform via: http://medsync.local"
-echo "📝 Note: Ensure 'medsync.local' is mapped to your cluster's ingress IP in /etc/hosts."
+echo "📝 Map 'medsync.local' to your cluster's ingress IP in /etc/hosts."
 echo "🔎 Run 'kubectl get all -n medsync' to check detailed status."
 echo "--------------------------------------------------------"

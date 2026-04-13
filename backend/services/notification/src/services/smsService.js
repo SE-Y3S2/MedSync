@@ -1,11 +1,29 @@
+let twilioClient = null;
+if (process.env.TWILIO_SID && process.env.TWILIO_AUTH_TOKEN && process.env.TWILIO_FROM) {
+  twilioClient = require('twilio')(process.env.TWILIO_SID, process.env.TWILIO_AUTH_TOKEN);
+}
+
 const sendSMS = async (phoneNumber, message) => {
-  try {
-    // In a real application, you would integrate Twilio or Clickatell here.
-    // Since this is a university assignment, we'll log the mock SMS.
-    console.log(`[SMSService] Mocking SMS to ${phoneNumber}: "${message}"`);
-  } catch (error) {
-    console.error(`[SMSService] Error mocking SMS:`, error.message);
+  if (!phoneNumber) {
+    console.warn('[SMSService] No phone number provided');
+    return;
   }
+
+  if (twilioClient) {
+    try {
+      await twilioClient.messages.create({
+        body: message,
+        from: process.env.TWILIO_FROM,
+        to: phoneNumber,
+      });
+      console.log(`[SMSService] Sent SMS to ${phoneNumber}`);
+    } catch (error) {
+      console.error(`[SMSService] Twilio error:`, error.message);
+    }
+    return;
+  }
+
+  console.log(`[SMSService] (mock) SMS to ${phoneNumber}: "${message}"`);
 };
 
 module.exports = { sendSMS };

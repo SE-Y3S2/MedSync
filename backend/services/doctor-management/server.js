@@ -1,11 +1,10 @@
 const path = require('path');
-// Local dev: repo-root .env. Docker: vars from compose / env_file (no valid path to monorepo .env in image).
 require('dotenv').config({ path: path.join(__dirname, '.env') });
 require('dotenv').config({ path: path.join(__dirname, '../../../.env') });
 
-const app = require('./src/app');
-
 const mongoose = require('mongoose');
+const app = require('./src/app');
+const { connectProducer } = require('./src/utils/kafka');
 
 const port = process.env.PORT || 3002;
 
@@ -16,16 +15,16 @@ const mongoOpts = {
   family: 4,
 };
 
-const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/medsync';
+const start = async () => {
+  const uri = process.env.MONGO_URI;
+  if (!uri) throw new Error('MONGO_URI is not set');
+  await mongoose.connect(uri, mongoOpts);
+  console.log('[doctor-management] MongoDB connected');
+  await connectProducer();
+  app.listen(port, () => console.log(`[doctor-management] listening on ${port}`));
+};
 
-if (!process.env.MONGO_URI) {
-  console.warn('[doctor-management] MONGO_URI is not set; using local default (will fail inside Docker if Mongo is not on the host network).');
-}
-
-mongoose.connect(mongoUri, mongoOpts)
-  .then(() => console.log('Successfully connected to MongoDB'))
-  .catch((err) => console.error('Error connecting to MongoDB', err));
-
-app.listen(port, () => {
-  console.log(`Doctor Management Service listening on port ${port}`);
+start().catch((err) => {
+  console.error('[doctor-management] failed to start:', err);
+  process.exit(1);
 });

@@ -1,12 +1,8 @@
-FROM node:18-alpine
-
+FROM node:20-alpine
 WORKDIR /app
-
 COPY package*.json ./
-RUN npm install
-
+RUN npm install --omit=dev
 COPY . .
-
+USER node
 EXPOSE 3006
-
-CMD ["npm", "start"]
+CMD ["node", "src/server.js"]
