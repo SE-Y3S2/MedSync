@@ -29,9 +29,9 @@ exports.register = async (req, res) => {
     await patient.save();
 
     const token = jwt.sign(
-      { id: patient._id, patientId: patient._id, email: patient.email, role: 'patient' },
+      { userId: patient._id, patientId: patient._id, email: patient.email, role: 'patient' },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
 
     // Emit Kafka event
@@ -68,37 +68,12 @@ exports.login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: patient._id, patientId: patient._id, email: patient.email, role: 'patient' },
+      { userId: patient._id, patientId: patient._id, email: patient.email, role: 'patient' },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: process.env.JWT_EXPIRE || '7d' }
     );
 
     res.status(200).json({ token, patient });
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
-};
-
-// ───── Admin Auth ─────
-
-exports.adminLogin = async (req, res) => {
-  try {
-    const { email, password } = req.body;
-    
-    // Hardcoded Admin for the assignment requirements
-    if (email === 'admin@medsync.com' && password === 'admin123') {
-      const token = jwt.sign(
-        { email, role: 'admin' },
-        JWT_SECRET,
-        { expiresIn: '7d' }
-      );
-      return res.status(200).json({ 
-        token, 
-        admin: { email, name: 'Super Admin', role: 'admin' } 
-      });
-    }
-
-    return res.status(401).json({ message: 'Invalid admin credentials.' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -147,6 +122,53 @@ exports.updateProfile = async (req, res) => {
     });
 
     res.status(200).json(patient);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// ───── Doctor-scoped Access ─────
+
+// Doctor or admin viewing a specific patient's records (for consultation prep)
+exports.getPatientForProvider = async (req, res) => {
+  try {
+    if (!['doctor', 'admin'].includes(req.user?.role)) {
+      return res.status(403).json({ message: 'Only doctors or admins can view other patients.' });
+    }
+    const patient = await Patient.findById(req.params.patientId);
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
+    res.status(200).json({
+      profile: {
+        id: patient._id,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        email: patient.email,
+        phone: patient.phone,
+        dateOfBirth: patient.dateOfBirth,
+        gender: patient.gender,
+        bloodType: patient.bloodType,
+        allergies: patient.allergies,
+      },
+      medicalHistory: patient.medicalHistory,
+      prescriptions: patient.prescriptions,
+      documents: patient.documents,
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Admin listing all patients
+exports.listPatients = async (req, res) => {
+  try {
+    if (req.user?.role !== 'admin') {
+      return res.status(403).json({ message: 'Admin access required.' });
+    }
+    const patients = await Patient.find(
+      {},
+      'firstName lastName email phone dateOfBirth gender createdAt'
+    ).sort({ createdAt: -1 });
+    res.status(200).json(patients);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }

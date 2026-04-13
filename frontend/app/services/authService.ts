@@ -1,6 +1,6 @@
 import Cookies from 'js-cookie';
 
-const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:5000/auth';
+const AUTH_URL = process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || 'http://localhost:5000/api/auth';
 
 export interface User {
   id: string;
@@ -14,6 +14,15 @@ export interface AuthResponse {
   token: string;
 }
 
+const parseError = async (response: Response, fallback: string) => {
+  try {
+    const error = await response.json();
+    return error?.message || fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 export const authService = {
   login: async (email: string, password: string): Promise<AuthResponse> => {
     const response = await fetch(`${AUTH_URL}/login`, {
@@ -21,44 +30,34 @@ export const authService = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Login failed');
-    }
-
+    if (!response.ok) throw new Error(await parseError(response, 'Login failed'));
     return response.json();
   },
 
-  register: async (userData: any): Promise<AuthResponse> => {
+  register: async (userData: unknown): Promise<AuthResponse> => {
     const response = await fetch(`${AUTH_URL}/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || 'Registration failed');
-    }
-
+    if (!response.ok) throw new Error(await parseError(response, 'Registration failed'));
     return response.json();
   },
 
   logout: () => {
     Cookies.remove('medsync_token');
-    localStorage.removeItem('medsync_user');
+    if (typeof window !== 'undefined') localStorage.removeItem('medsync_user');
   },
 
   setToken: (token: string) => {
-    Cookies.set('medsync_token', token, { expires: 7, secure: process.env.NODE_ENV === 'production' });
+    Cookies.set('medsync_token', token, {
+      expires: 7,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+    });
   },
 
-  getToken: () => {
-    return Cookies.get('medsync_token');
-  },
+  getToken: () => Cookies.get('medsync_token'),
 
-  isAuthenticated: () => {
-    return !!Cookies.get('medsync_token');
-  }
+  isAuthenticated: () => !!Cookies.get('medsync_token'),
 };

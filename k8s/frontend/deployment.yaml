@@ -3,11 +3,8 @@ kind: Deployment
 metadata:
   name: frontend
   namespace: medsync
-<<<<<<< HEAD
-=======
   labels:
     app: frontend
->>>>>>> origin/main
 spec:
   replicas: 1
   selector:
@@ -20,12 +17,13 @@ spec:
     spec:
       containers:
       - name: frontend
-<<<<<<< HEAD
-        image: medsync-frontend:latest
-        imagePullPolicy: Never
+        image: frontend:latest
+        imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3000
         env:
+        - name: NEXT_PUBLIC_AUTH_SERVICE_URL
+          value: "http://medsync.local/api/auth"
         - name: NEXT_PUBLIC_PATIENT_SERVICE_URL
           value: "http://medsync.local/api/patient"
         - name: NEXT_PUBLIC_DOCTOR_SERVICE_URL
@@ -36,34 +34,14 @@ spec:
           value: "http://medsync.local/api/telemedicine"
         - name: NEXT_PUBLIC_PAYMENT_SERVICE_URL
           value: "http://medsync.local/api/payment"
+        - name: NEXT_PUBLIC_NOTIFICATION_SERVICE_URL
+          value: "http://medsync.local/api/notification"
         - name: NEXT_PUBLIC_SYMPTOM_CHECKER_URL
           value: "http://medsync.local/api/ai"
-=======
-        image: frontend:latest
-        ports:
-        - containerPort: 3000
-        env:
-        - name: REACT_APP_API_BASE_URL
-          value: "http://auth:5000"
         resources:
           requests:
             memory: "128Mi"
             cpu: "100m"
           limits:
-            memory: "256Mi"
-            cpu: "200m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: frontend
-  namespace: medsync
-spec:
-  selector:
-    app: frontend
-  ports:
-  - protocol: TCP
-    port: 3000
-    targetPort: 3000
-  type: LoadBalancer
->>>>>>> origin/main
+            memory: "512Mi"
+            cpu: "500m"

@@ -1,8 +1,13 @@
 const Doctor = require('../models/Doctor');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { sendEvent } = require('../utils/kafka');
 
-const JWT_SECRET = process.env.JWT_SECRET || 'medsync-secret-key-2026';
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET is not set');
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+const JWT_EXPIRE = process.env.JWT_EXPIRE || '7d';
 
 exports.registerDoctor = async (req, res) => {
   try {
@@ -26,13 +31,22 @@ exports.registerDoctor = async (req, res) => {
     });
     
     await doctor.save();
-    
+
+    await sendEvent('doctor-events', {
+      type: 'DOCTOR_REGISTERED',
+      doctorId: doctor._id,
+      email: doctor.contact?.email,
+      name: doctor.name,
+      specialty: doctor.specialty,
+      timestamp: new Date(),
+    });
+
     const token = jwt.sign(
-      { id: doctor._id, doctorId: doctor._id, email: doctor.contact.email, role: 'doctor' },
+      { userId: doctor._id, doctorId: doctor._id, email: doctor.contact.email, role: 'doctor' },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: JWT_EXPIRE }
     );
-    
+
     res.status(201).json({ token, doctor });
   } catch (error) {
     res.status(400).json({ message: error.message });
@@ -58,9 +72,9 @@ exports.login = async (req, res) => {
     }
 
     const token = jwt.sign(
-      { id: doctor._id, doctorId: doctor._id, email: doctor.contact.email, role: 'doctor' },
+      { userId: doctor._id, doctorId: doctor._id, email: doctor.contact.email, role: 'doctor' },
       JWT_SECRET,
-      { expiresIn: '7d' }
+      { expiresIn: JWT_EXPIRE }
     );
 
     res.status(200).json({ token, doctor });
@@ -100,6 +114,71 @@ exports.listDoctors = async (req, res) => {
     res.json(doctors);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// ── Availability ─────────────────────────────────────────────────────────────
+
+exports.getAvailability = async (req, res) => {
+  try {
+    const doctor = await Doctor.findById(req.params.id).select('availability name specialty');
+    if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+    res.json(doctor.availability || []);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.addAvailability = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin' && req.user.id !== req.params.id) {
+      return res.status(403).json({ message: 'Forbidden: You can only manage your own schedule.' });
+    }
+
+    const { day, startTime, endTime, maxPatients } = req.body || {};
+    if (!day || !startTime || !endTime) {
+      return res.status(400).json({ message: 'day, startTime, and endTime are required.' });
+    }
+
+    const doctor = await Doctor.findById(req.params.id);
+    if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+
+    doctor.availability.push({ day, startTime, endTime, maxPatients });
+    await doctor.save();
+
+    await sendEvent('doctor-events', {
+      type: 'DOCTOR_AVAILABILITY_UPDATED',
+      doctorId: doctor._id,
+      timestamp: new Date(),
+    });
+
+    res.status(201).json(doctor.availability);
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+exports.deleteAvailability = async (req, res) => {
+  try {
+    if (req.user.role !== 'admin' && req.user.id !== req.params.id) {
+      return res.status(403).json({ message: 'Forbidden: You can only manage your own schedule.' });
+    }
+
+    const doctor = await Doctor.findById(req.params.id);
+    if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+
+    const before = doctor.availability.length;
+    doctor.availability = doctor.availability.filter(
+      (slot) => slot._id.toString() !== req.params.slotId
+    );
+    if (doctor.availability.length === before) {
+      return res.status(404).json({ message: 'Slot not found' });
+    }
+
+    await doctor.save();
+    res.json({ message: 'Slot removed', availability: doctor.availability });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
   }
 };
 

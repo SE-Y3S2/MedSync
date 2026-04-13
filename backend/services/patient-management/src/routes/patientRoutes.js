@@ -7,17 +7,22 @@ const upload = require('../middleware/uploadMiddleware');
 // ───── Public routes (no auth required) ─────
 router.post('/register', patientController.register);
 router.post('/login', patientController.login);
-router.post('/admin/login', patientController.adminLogin);
 
 // ───── Protected routes (auth required) ─────
 router.get('/profile', authMiddleware, patientController.getProfile);
 router.put('/profile', authMiddleware, patientController.updateProfile);
+
+// Admin-only: list all patients (must be defined BEFORE `/:patientId/*` catchers)
+router.get('/', authMiddleware, patientController.listPatients);
 
 // Records routes
 router.get('/records', authMiddleware, patientController.getRecords);
 router.post('/records/history', authMiddleware, patientController.addMedicalRecord);
 router.post('/records/prescriptions', authMiddleware, patientController.addPrescription);
 router.post('/:patientId/prescriptions', authMiddleware, patientController.doctorIssuePrescription);
+
+// Doctor/admin: view a specific patient's full record
+router.get('/:patientId/full', authMiddleware, patientController.getPatientForProvider);
 
 // Document routes
 router.post('/documents/upload', authMiddleware, upload.single('file'), patientController.uploadDocument);

@@ -5,6 +5,11 @@ namespace: medsync
 
 resources:
   - namespace.yaml
+  - secrets.yaml
+  - mongo/deployment.yaml
+  - mongo/service.yaml
+  - redis/deployment.yaml
+  - redis/service.yaml
   - zookeeper/deployment.yaml
   - zookeeper/service.yaml
   - kafka/deployment.yaml
@@ -18,20 +23,13 @@ resources:
   - payment/deployment.yaml
   - ai-symptom-checker/deployment.yaml
   - frontend/deployment.yaml
-<<<<<<< HEAD
   - frontend/service.yaml
-  - ingress.yaml
-
-images:
-  - name: frontend
-=======
   - ingress.yaml
 
 images:
   - name: auth
     newTag: latest
   - name: notification
->>>>>>> origin/main
     newTag: latest
   - name: patient-management
     newTag: latest

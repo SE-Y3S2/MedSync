@@ -160,6 +160,23 @@ exports.getPaymentByAppointment = async (req, res, next) => {
     }
 };
 
+// ── GET /api/payments/admin/all ───────────────────────────────────────────────
+exports.listAllPayments = async (req, res, next) => {
+    try {
+        if (req.user?.role !== 'admin') {
+            return res.status(403).json({ message: 'Admin access required.' });
+        }
+        const payments = await Payment.find({}).sort({ createdAt: -1 }).limit(500);
+        const totals = await Payment.aggregate([
+            { $match: { status: 'paid' } },
+            { $group: { _id: '$currency', total: { $sum: '$amount' }, count: { $sum: 1 } } },
+        ]);
+        res.json({ payments, totals });
+    } catch (error) {
+        next(error);
+    }
+};
+
 // ── GET /api/payments/patient/:id ────────────────────────────────────────────
 exports.getPatientPaymentHistory = async (req, res, next) => {
     try {

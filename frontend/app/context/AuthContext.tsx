@@ -3,13 +3,12 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import Cookies from 'js-cookie';
 import { authService, User as AuthUser } from '../services/authService';
-import { patientApi, doctorApi, adminApi } from '../services/api';
 
 interface AuthContextType {
   user: AuthUser | null;
   token: string | null;
   login: (email: string, password: string) => Promise<AuthUser>;
-  register: (data: any) => Promise<AuthUser>;
+  register: (data: Record<string, unknown> & { role: 'patient' | 'doctor' }) => Promise<AuthUser>;
   logout: () => void;
   isLoading: boolean;
 }
@@ -21,60 +20,37 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Load stored auth on mount
   useEffect(() => {
     const storedToken = Cookies.get('medsync_token');
-    const storedUser = localStorage.getItem('medsync_user');
+    const storedUser = typeof window !== 'undefined' ? localStorage.getItem('medsync_user') : null;
     if (storedToken && storedUser) {
-      setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      try {
+        setToken(storedToken);
+        setUser(JSON.parse(storedUser));
+      } catch {
+        authService.logout();
+      }
     }
     setIsLoading(false);
   }, []);
 
   const login = async (email: string, password: string) => {
-    let data;
-
-    // 1. Try Admin (Hardcoded checks run lightning fast natively)
-    if (email === 'admin@medsync.com') {
-      try {
-        data = await adminApi.login({ email, password });
-      } catch (err) {
-        throw new Error('Invalid admin credentials.');
-      }
-    } else {
-      // 2. Try Doctor Database
-      try {
-        data = await doctorApi.login({ email, password });
-      } catch (err) {
-        // 3. Fallback to Patient Database
-        try {
-          data = await patientApi.login({ email, password });
-        } catch (innerErr) {
-          throw new Error('Invalid email or password.');
-        }
-      }
-    }
-    
+    const data = await authService.login(email, password);
     authService.setToken(data.token);
-    localStorage.setItem('medsync_user', JSON.stringify(data.user || data.doctor || data.patient || data.admin));
-    
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('medsync_user', JSON.stringify(data.user));
+    }
     setToken(data.token);
-    setUser(data.user || data.doctor || data.patient || data.admin);
-    return (data.user || data.doctor || data.patient || data.admin);
+    setUser(data.user);
+    return data.user;
   };
 
-  const register = async (formData: any) => {
-    let data;
-    if (formData.role === 'doctor') {
-      data = await doctorApi.register(formData);
-    } else {
-      data = await patientApi.register(formData);
-    }
-    
+  const register = async (formData: Record<string, unknown> & { role: 'patient' | 'doctor' }) => {
+    const data = await authService.register(formData);
     authService.setToken(data.token);
-    localStorage.setItem('medsync_user', JSON.stringify(data.user));
-    
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('medsync_user', JSON.stringify(data.user));
+    }
     setToken(data.token);
     setUser(data.user);
     return data.user;
@@ -84,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     authService.logout();
     setToken(null);
     setUser(null);
-    window.location.href = '/login';
+    if (typeof window !== 'undefined') window.location.href = '/login';
   };
 
   return (
@@ -96,8 +72,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }

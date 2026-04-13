@@ -1,14 +1,16 @@
 const app = require('./src/app');
+const connectDB = require('./src/config/db');
 const { connectProducer } = require('./src/utils/kafka');
 
 const PORT = process.env.PORT || 3003;
 
-const startServer = async () => {
+const start = async () => {
+  await connectDB();
   await connectProducer();
-
-  app.listen(PORT, () => {
-    console.log(`Appointment Service listening on port ${PORT}`);
-  });
+  app.listen(PORT, () => console.log(`[appointment] listening on ${PORT}`));
 };
 
-startServer();
+start().catch((err) => {
+  console.error('[appointment] failed to start:', err);
+  process.exit(1);
+});

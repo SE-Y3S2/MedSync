@@ -1,7 +1,17 @@
 'use client';
 
 import React, { useState, useEffect, useRef } from 'react';
-import { patientApi } from '../../services/api';
+import { patientApi, PATIENT_API_BASE } from '../../services/api';
+
+// Derive the patient-service origin from the API base so uploaded documents
+// resolve relative to the service, not the frontend host.
+const PATIENT_SERVICE_ORIGIN = (() => {
+  try {
+    return new URL(PATIENT_API_BASE).origin;
+  } catch {
+    return 'http://localhost:3001';
+  }
+})();
 import { Card, Button, Tabs, Badge, showToast, Modal } from '../../components/UI';
 
 export default function RecordsPage() {
@@ -278,7 +288,7 @@ export default function RecordsPage() {
                     </div>
                     <div className="doc-item-actions">
                       <a
-                        href={`http://localhost:3001/${doc.fileUrl}`}
+                        href={`${PATIENT_SERVICE_ORIGIN}/${doc.fileUrl}`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="med-button secondary sm"

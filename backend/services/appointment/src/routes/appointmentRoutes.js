@@ -15,6 +15,9 @@ router.get('/available-slots/:doctorId', ctrl.getBookedSlots);
 
 // ── Protected ────────────────────────────────────────────────────────────────
 
+// Admin: all appointments across the platform
+router.get('/admin/all', auth, ctrl.listAllAppointments);
+
 // Patient's appointments
 router.get('/patient/:patientId', auth, ctrl.getPatientAppointments);
 
@@ -32,6 +35,9 @@ router.post('/', auth, createAppointmentRules, ctrl.createAppointment);
 
 // Doctor accepts/rejects; patient updates status (with validation)
 router.put('/:id/status', auth, updateStatusRules, ctrl.updateStatus);
+
+// Reschedule (patient or admin)
+router.put('/:id/reschedule', auth, ctrl.rescheduleAppointment);
 
 // ── Internal Service Call (no JWT — payment service calls this) ───────────────
 // NOTE: If you want to secure this in production, use a shared service secret header.

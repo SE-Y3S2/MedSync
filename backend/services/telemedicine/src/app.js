@@ -2,31 +2,40 @@ const express = require('express');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 
+if (!process.env.JWT_SECRET) {
+  throw new Error('FATAL: JWT_SECRET is not set');
+}
+const JWT_SECRET = process.env.JWT_SECRET;
+
 const app = express();
 const sessions = new Map();
-const JWT_SECRET = process.env.JWT_SECRET || 'medsync-secret-key-2026';
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
 const auth = (req, res, next) => {
-    try {
-        const token = req.headers.authorization.split(' ')[1];
-        req.user = jwt.verify(token, JWT_SECRET);
-        next();
-    } catch (err) {
-        return res.status(401).json({ message: 'Unauthorized' });
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ message: 'Authorization token required' });
     }
+    const token = authHeader.split(' ')[1];
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = {
+      id: decoded.userId || decoded.id || decoded.doctorId || decoded.patientId,
+      email: decoded.email,
+      role: decoded.role,
+    };
+    next();
+  } catch {
+    return res.status(401).json({ message: 'Unauthorized' });
+  }
 };
 
-// Session routes
 app.post('/api/sessions', auth, (req, res) => {
   const { appointmentId, doctorId, patientId } = req.body || {};
-
   if (!appointmentId || !doctorId || !patientId) return res.status(400).json({ message: 'Missing fields' });
 
-  // Ownership check
   if (req.user.role !== 'admin' && req.user.id !== patientId && req.user.id !== doctorId) {
     return res.status(403).json({ message: 'Forbidden: You cannot create a session for this appointment' });
   }
@@ -61,7 +70,7 @@ app.put('/api/sessions/:appointmentId/end', auth, (req, res) => {
   if (!session) return res.status(404).json({ message: 'Session not found' });
 
   if (req.user.role !== 'admin' && req.user.id !== session.doctorId) {
-      return res.status(403).json({ message: 'Forbidden: Only the doctor can end a session' });
+    return res.status(403).json({ message: 'Forbidden: Only the doctor can end a session' });
   }
 
   const ended = { ...session, status: 'ended', endedAt: new Date().toISOString() };
@@ -69,12 +78,7 @@ app.put('/api/sessions/:appointmentId/end', auth, (req, res) => {
   return res.json(ended);
 });
 
-// Health check
-app.get('/', (req, res) => {
-  res.json({ service: 'Telemedicine API', status: 'running' });
-});
-
-// TODO: Add your routes here
-// app.use('/api/telemedicine', telemedicineRoutes);
+app.get('/', (_req, res) => res.json({ service: 'Telemedicine API', status: 'running' }));
+app.get('/health', (_req, res) => res.json({ ok: true }));
 
 module.exports = app;

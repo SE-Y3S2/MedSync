@@ -1,15 +1,10 @@
 const mongoose = require('mongoose');
 
 const connectDB = async () => {
-    try {
-        const conn = await mongoose.connect(
-            process.env.MONGO_URI || 'mongodb://localhost:27019/payment_db'
-        );
-        console.log(`[Payment] MongoDB Connected: ${conn.connection.host}`);
-    } catch (error) {
-        console.error(`[Payment] DB Error: ${error.message}`);
-        process.exit(1);
-    }
+  const uri = process.env.MONGO_URI;
+  if (!uri) throw new Error('MONGO_URI is not set');
+  const conn = await mongoose.connect(uri);
+  console.log(`[payment] MongoDB connected: ${conn.connection.host}`);
 };
 
 module.exports = connectDB;

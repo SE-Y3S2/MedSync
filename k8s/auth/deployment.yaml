@@ -22,11 +22,17 @@ spec:
         - containerPort: 5000
         env:
         - name: MONGO_URI
-          value: "mongodb://mongo:27017/medsync"
+          value: "mongodb://mongo:27017/auth_db"
         - name: JWT_SECRET
-          value: "medsync_super_secret_jwt_key_2026"
+          valueFrom:
+            secretKeyRef:
+              name: medsync-secrets
+              key: JWT_SECRET
         - name: JWT_EXPIRE
-          value: "7d"
+          valueFrom:
+            secretKeyRef:
+              name: medsync-secrets
+              key: JWT_EXPIRE
         - name: PORT
           value: "5000"
         resources:

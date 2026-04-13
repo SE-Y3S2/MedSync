@@ -17,6 +17,7 @@ const connectConsumer = async () => {
     await consumer.subscribe({ topic: 'appointment-events', fromBeginning: true });
     await consumer.subscribe({ topic: 'payment-events', fromBeginning: true });
     await consumer.subscribe({ topic: 'patient-events', fromBeginning: true });
+    await consumer.subscribe({ topic: 'doctor-events', fromBeginning: true });
 
     await consumer.run({
       eachMessage: async ({ topic, partition, message }) => {

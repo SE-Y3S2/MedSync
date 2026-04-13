@@ -11,6 +11,9 @@ router.post('/webhook', ctrl.handleWebhook);
 // Create a Stripe Checkout session for an appointment
 router.post('/checkout', auth, ctrl.createCheckoutSession);
 
+// Admin: all payments + revenue summary (must come before `/:appointmentId`)
+router.get('/admin/all', auth, ctrl.listAllPayments);
+
 // Payment history for a patient
 router.get('/patient/:id', auth, ctrl.getPatientPaymentHistory);
 

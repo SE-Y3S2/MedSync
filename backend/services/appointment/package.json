@@ -16,10 +16,10 @@
     "jsonwebtoken": "^9.0.2",
     "kafkajs": "^2.2.4",
     "mongoose": "^7.5.0",
-    "morgan": "^1.10.0"
+    "morgan": "^1.10.0",
+    "axios": "^1.6.0"
   },
   "devDependencies": {
-    "axios": "^1.13.6",
     "nodemon": "^2.0.22"
   }
 }

@@ -1,14 +1,32 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { MedCard as Card, MedButton as Button, Badge, Skeleton, showToast, Tabs } from '../components/UI';
+import { MedCard as Card, MedButton as Button, MedInput as Input, Badge, Skeleton, showToast, Tabs, Modal } from '../components/UI';
 import { appointmentApi, paymentApi } from '@/app/services/api';
-import { User, CalendarX } from 'lucide-react';
+import { User, CalendarX, CalendarClock } from 'lucide-react';
+
+interface Appointment {
+    _id: string;
+    doctorId: string;
+    doctorName: string;
+    specialty: string;
+    slotDate: string;
+    slotTime: string;
+    consultationFee?: number;
+    status: string;
+    paymentStatus?: string;
+}
 
 export default function AppointmentListPage() {
-    const [appointments, setAppointments] = useState<any[]>([]);
+    const [appointments, setAppointments] = useState<Appointment[]>([]);
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState(0);
+
+    const [showReschedule, setShowReschedule] = useState(false);
+    const [rescheduleTarget, setRescheduleTarget] = useState<Appointment | null>(null);
+    const [newDate, setNewDate] = useState('');
+    const [newTime, setNewTime] = useState('');
+    const [rescheduling, setRescheduling] = useState(false);
 
     const fetchAppointments = async () => {
         try {
@@ -17,7 +35,7 @@ export default function AppointmentListPage() {
                 const data = await appointmentApi.getPatientAppointments(patientData.id);
                 setAppointments(data);
             }
-        } catch (err) {
+        } catch {
             showToast('Failed to load appointments', 'error');
         } finally {
             setLoading(false);
@@ -28,15 +46,15 @@ export default function AppointmentListPage() {
         fetchAppointments();
     }, []);
 
-    const handlePayment = async (appt: any) => {
+    const handlePayment = async (appt: Appointment) => {
         try {
             const patientData = JSON.parse(localStorage.getItem('medsync_user') || '{}');
             const { url } = await paymentApi.createCheckoutSession({
                 appointmentId: appt._id,
-                patientId: patientData.patientId || patientData.id,
+                patientId: patientData.id,
                 doctorId: appt.doctorId,
                 doctorName: appt.doctorName,
-                amount: appt.consultationFee || 500 // Fallback if missing
+                amount: appt.consultationFee || 500,
             });
             window.location.href = url;
         } catch (err: any) {
@@ -45,26 +63,55 @@ export default function AppointmentListPage() {
     };
 
     const handleCancel = async (id: string) => {
-        if (!window.confirm('Are you sure you want to cancel this appointment?')) return;
+        if (!window.confirm('Cancel this appointment?')) return;
         try {
-            await appointmentApi.cancelAppointment(id);
-            showToast('Appointment cancelled successfully', 'info');
+            await appointmentApi.cancelAppointment(id, { cancelledBy: 'patient' });
+            showToast('Appointment cancelled', 'info');
             fetchAppointments();
-        } catch (err) {
+        } catch {
             showToast('Cancellation failed', 'error');
+        }
+    };
+
+    const openReschedule = (appt: Appointment) => {
+        setRescheduleTarget(appt);
+        setNewDate(appt.slotDate);
+        setNewTime(appt.slotTime);
+        setShowReschedule(true);
+    };
+
+    const submitReschedule = async () => {
+        if (!rescheduleTarget) return;
+        if (!newDate || !newTime) {
+            showToast('Pick a new date and time', 'warning');
+            return;
+        }
+        setRescheduling(true);
+        try {
+            await appointmentApi.rescheduleAppointment(rescheduleTarget._id, {
+                slotDate: newDate,
+                slotTime: newTime,
+            });
+            showToast('Appointment rescheduled', 'success');
+            setShowReschedule(false);
+            fetchAppointments();
+        } catch (err: any) {
+            showToast(err.message || 'Reschedule failed', 'error');
+        } finally {
+            setRescheduling(false);
         }
     };
 
     const filtered = appointments.filter(a => {
         if (activeTab === 0) return ['pending', 'confirmed'].includes(a.status);
         if (activeTab === 1) return a.status === 'completed';
-        return a.status === 'cancelled';
+        return ['cancelled', 'rejected'].includes(a.status);
     });
 
     return (
         <div className="animate-in">
             <header style={{ marginBottom: '32px' }}>
-                <h1 className="page-title text-navy">My Appointments</h1>
+                <h1 className="page-title">My Appointments</h1>
                 <p className="page-subtitle">Track your upcoming consultations and review medical visits.</p>
             </header>
 
@@ -90,7 +137,7 @@ export default function AppointmentListPage() {
                                     <strong>Specialty:</strong> {appt.specialty}
                                 </p>
 
-                                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--card-border)', paddingTop: '16px' }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid var(--card-border)', paddingTop: '16px', flexWrap: 'wrap', gap: '8px' }}>
                                     <div style={{ display: 'flex', gap: '8px' }}>
                                         <Badge
                                             text={appt.status?.toUpperCase()}
@@ -101,12 +148,19 @@ export default function AppointmentListPage() {
                                             variant={appt.paymentStatus === 'paid' ? 'low' : 'high'}
                                         />
                                     </div>
-                                    <div style={{ display: 'flex', gap: '8px' }}>
+                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                         {appt.paymentStatus === 'unpaid' && ['pending', 'confirmed'].includes(appt.status) && (
-                                            <Button size="sm" className="turquoise" onClick={() => handlePayment(appt)}>Pay Now</Button>
+                                            <Button size="sm" onClick={() => handlePayment(appt)}>Pay Now</Button>
                                         )}
                                         {['pending', 'confirmed'].includes(appt.status) && (
-                                            <Button size="sm" variant="danger" onClick={() => handleCancel(appt._id)}>Cancel</Button>
+                                            <>
+                                                <Button size="sm" variant="secondary" onClick={() => openReschedule(appt)}>
+                                                    Reschedule
+                                                </Button>
+                                                <Button size="sm" variant="danger" onClick={() => handleCancel(appt._id)}>
+                                                    Cancel
+                                                </Button>
+                                            </>
                                         )}
                                     </div>
                                 </div>
@@ -121,6 +175,34 @@ export default function AppointmentListPage() {
                     </div>
                 )}
             </div>
+
+            <Modal
+                isOpen={showReschedule}
+                onClose={() => setShowReschedule(false)}
+                title={`Reschedule with Dr. ${rescheduleTarget?.doctorName || ''}`}
+            >
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                    <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <CalendarClock size={16} />
+                        Current: {rescheduleTarget?.slotDate} at {rescheduleTarget?.slotTime}
+                    </div>
+                    <Input
+                        label="New Date"
+                        type="date"
+                        value={newDate}
+                        onChange={(e) => setNewDate(e.target.value)}
+                    />
+                    <Input
+                        label="New Time"
+                        type="time"
+                        value={newTime}
+                        onChange={(e) => setNewTime(e.target.value)}
+                    />
+                    <Button onClick={submitReschedule} disabled={rescheduling} style={{ width: '100%' }}>
+                        {rescheduling ? 'Rescheduling…' : 'Confirm Reschedule'}
+                    </Button>
+                </div>
+            </Modal>
         </div>
     );
 }

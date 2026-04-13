@@ -46,8 +46,8 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
             }
 
             await appointmentApi.createAppointment({
-                patientId: patientData.patientId || patientData.id,
-                patientName: `${patientData.firstName} ${patientData.lastName}`,
+                patientId: patientData.id,
+                patientName: patientData.name || `${patientData.firstName || ''} ${patientData.lastName || ''}`.trim(),
                 patientEmail: patientData.email,
                 doctorId: doctorId,
                 doctorName: doctor.name,
