@@ -15,6 +15,14 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+// Defensive normalisation — backend services still return `_id` and sometimes omit `role`.
+const normaliseUser = (raw: any): AuthUser => {
+  const u = { ...raw };
+  if (u._id && !u.id) u.id = u._id;
+  if (!u.role && u.email !== 'admin@medsync.com') u.role = 'patient';
+  return u as AuthUser;
+};
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -26,7 +34,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (storedToken && storedUser) {
       try {
         setToken(storedToken);
-        setUser(JSON.parse(storedUser));
+        setUser(normaliseUser(JSON.parse(storedUser)));
       } catch {
         authService.logout();
       }
@@ -36,24 +44,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const data = await authService.login(email, password);
+    const u = normaliseUser(data.user);
     authService.setToken(data.token);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('medsync_user', JSON.stringify(data.user));
+      localStorage.setItem('medsync_user', JSON.stringify(u));
     }
     setToken(data.token);
-    setUser(data.user);
-    return data.user;
+    setUser(u);
+    return u;
   };
 
   const register = async (formData: Record<string, unknown> & { role: 'patient' | 'doctor' }) => {
     const data = await authService.register(formData);
+    const u = normaliseUser(data.user);
+    if (!u.role) u.role = formData.role;
     authService.setToken(data.token);
     if (typeof window !== 'undefined') {
-      localStorage.setItem('medsync_user', JSON.stringify(data.user));
+      localStorage.setItem('medsync_user', JSON.stringify(u));
     }
     setToken(data.token);
-    setUser(data.user);
-    return data.user;
+    setUser(u);
+    return u;
   };
 
   const logout = () => {

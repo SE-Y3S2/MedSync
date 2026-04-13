@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   UserCog, Stethoscope, Clock, Calendar, Home,
   Search, CalendarClock, User, FileText, Bot, Video, LayoutDashboard,
-  Users, LineChart,
+  Users, LineChart, CreditCard, LogOut,
 } from 'lucide-react';
 
 const getNavItems = (role?: string) => {
@@ -18,6 +18,8 @@ const getNavItems = (role?: string) => {
       { href: '/admin', label: 'Admin Dashboard', icon: <LayoutDashboard size={20} /> },
       { href: '/admin/doctors', label: 'Manage Doctors', icon: <UserCog size={20} /> },
       { href: '/admin/patients', label: 'Manage Patients', icon: <Users size={20} /> },
+      { href: '/admin/appointments', label: 'All Appointments', icon: <Calendar size={20} /> },
+      { href: '/admin/payments', label: 'System Payments', icon: <CreditCard size={20} /> },
       { href: '/admin/oversight', label: 'Platform Oversight', icon: <LineChart size={20} /> },
     ];
   }
@@ -37,6 +39,7 @@ const getNavItems = (role?: string) => {
     { href: '/patient/profile', label: 'My Profile', icon: <User size={20} /> },
     { href: '/patient/records', label: 'Records & Documents', icon: <FileText size={20} /> },
     { href: '/symptom-checker', label: 'AI Symptom Checker', icon: <Bot size={20} /> },
+    { href: '/payment', label: 'Billing & Payments', icon: <CreditCard size={20} /> },
   ];
 };
 
@@ -156,18 +159,9 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
                 <p style={{ marginBottom: '8px' }}>{user.email}</p>
                 <button
                   onClick={logout}
-                  style={{
-                    background: 'rgba(255,255,255,0.1)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    color: '#fff',
-                    padding: '6px 16px',
-                    borderRadius: '6px',
-                    cursor: 'pointer',
-                    fontSize: '0.8rem',
-                    width: '100%'
-                  }}
+                  className="logout-btn"
                 >
-                  Logout
+                  <LogOut size={16} /> Logout
                 </button>
               </div>
             ) : (

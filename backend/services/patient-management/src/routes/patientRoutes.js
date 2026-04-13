@@ -29,4 +29,9 @@ router.post('/documents/upload', authMiddleware, upload.single('file'), patientC
 router.get('/documents', authMiddleware, patientController.getDocuments);
 router.delete('/documents/:id', authMiddleware, patientController.deleteDocument);
 
+// Doctor Oversight routes
+router.get('/:patientId', authMiddleware, patientController.getPatientProfile);
+router.get('/:patientId/records', authMiddleware, patientController.getPatientRecords);
+router.get('/:patientId/documents', authMiddleware, patientController.getPatientDocuments);
+
 module.exports = router;

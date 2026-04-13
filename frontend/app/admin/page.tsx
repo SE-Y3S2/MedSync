@@ -6,7 +6,7 @@ import { useAuth } from '../context/AuthContext';
 import { doctorApi, patientApi, appointmentApi, paymentApi } from '../services/api';
 import {
   ShieldBan, Users, UserCheck, AlertTriangle, ArrowRight, Database,
-  LayoutDashboard, LineChart, Calendar,
+  LayoutDashboard, LineChart, Calendar, CreditCard,
 } from 'lucide-react';
 
 interface RevenueRow { _id: string; total: number; count: number }
@@ -146,13 +146,43 @@ export default function AdminDashboard() {
 
         <div className="med-card" style={{ padding: '24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+            <div className="avatar sm" style={{ background: 'var(--success-light)', color: 'var(--success)' }}>
+              <Calendar size={20} />
+            </div>
+            <h3 className="card-title" style={{ margin: 0 }}>Appointments</h3>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '18px' }}>
+            System-wide consultation overview. Pending, confirmed, and completed bookings across providers.
+          </p>
+          <Link href="/admin/appointments" className="med-button primary" style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Calendar size={16} /> View All Bookings <ArrowRight size={16} />
+          </Link>
+        </div>
+
+        <div className="med-card" style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+            <div className="avatar sm" style={{ background: 'var(--warning-light)', color: 'var(--warning)' }}>
+              <CreditCard size={20} />
+            </div>
+            <h3 className="card-title" style={{ margin: 0 }}>Payments &amp; Revenue</h3>
+          </div>
+          <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '18px' }}>
+            Platform financial logs. Transaction statuses, revenue distribution, and reconciliation of provider fees.
+          </p>
+          <Link href="/admin/payments" className="med-button secondary" style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <CreditCard size={16} /> Revenue Dashboard <ArrowRight size={16} />
+          </Link>
+        </div>
+
+        <div className="med-card" style={{ padding: '24px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
             <div className="avatar sm" style={{ background: 'var(--primary-light)', color: 'var(--primary)' }}>
               <LineChart size={20} />
             </div>
             <h3 className="card-title" style={{ margin: 0 }}>Platform Oversight</h3>
           </div>
           <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem', marginBottom: '18px' }}>
-            Monitor every appointment and financial transaction across the platform in real time.
+            Unified view of appointments and transactions — trend monitoring with live summary totals.
           </p>
           <Link href="/admin/oversight" className="med-button primary" style={{ width: '100%', justifyContent: 'center', display: 'flex', alignItems: 'center', gap: '8px' }}>
             Open Oversight <ArrowRight size={16} />

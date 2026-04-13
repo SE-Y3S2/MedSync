@@ -1,10 +1,11 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { appointmentApi, patientApi } from '../../services/api';
 import { Modal, MedInput as Input, MedButton as Button, showToast } from '../../components/UI';
-import { User, FileText, Pill, Calendar, ShieldBan } from 'lucide-react';
+import { User, FileText, Pill, Calendar, ShieldBan, Video } from 'lucide-react';
 
 interface Appointment {
   _id: string;
@@ -185,6 +186,16 @@ export default function DoctorAppointments() {
                   >
                     <FileText size={14} /> View Records
                   </button>
+
+                  {a.status === 'confirmed' && (
+                    <Link
+                      href={`/telemedicine/${a._id}`}
+                      className="med-button secondary sm"
+                      style={{ display: 'flex', alignItems: 'center', gap: '6px', textDecoration: 'none' }}
+                    >
+                      <Video size={14} /> Join Video
+                    </Link>
+                  )}
 
                   {a.status === 'pending' && (
                     <>

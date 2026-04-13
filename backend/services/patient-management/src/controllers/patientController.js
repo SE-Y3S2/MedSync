@@ -336,3 +336,44 @@ exports.deleteDocument = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// ───── Doctor Oversight / Admin ─────
+
+// Get patient profile by ID (for doctors to review allergies etc)
+exports.getPatientProfile = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const patient = await Patient.findById(patientId).select('-password');
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
+    res.status(200).json(patient);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get patient records (medical history + prescriptions)
+exports.getPatientRecords = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const patient = await Patient.findById(patientId);
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
+    res.status(200).json({
+      medicalHistory: patient.medicalHistory,
+      prescriptions: patient.prescriptions
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Get patient documents
+exports.getPatientDocuments = async (req, res) => {
+  try {
+    const { patientId } = req.params;
+    const patient = await Patient.findById(patientId);
+    if (!patient) return res.status(404).json({ message: 'Patient not found' });
+    res.status(200).json(patient.documents);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};

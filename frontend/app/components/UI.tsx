@@ -156,9 +156,10 @@ interface ModalProps {
   onClose: () => void;
   title: string;
   children: React.ReactNode;
+  width?: string;
 }
 
-export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
+export const Modal = ({ isOpen, onClose, title, children, width }: ModalProps) => {
   if (!isOpen) return null;
   return (
     <div style={{
@@ -168,7 +169,7 @@ export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
     }} onClick={onClose}>
       <div style={{
         background: 'white', borderRadius: 'var(--radius-lg)',
-        padding: '28px', maxWidth: '500px', width: '90%',
+        padding: '28px', maxWidth: width || '500px', width: '90%',
         boxShadow: 'var(--shadow-lg)', maxHeight: '80vh', overflow: 'auto'
       }} onClick={e => e.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
@@ -220,8 +221,10 @@ interface MedInputProps extends InputProps {
   style?: React.CSSProperties;
   name?: string;
   onChange: (e: any) => void;
+  onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  onKeyPress?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
 }
-export const MedInput = ({ label, type = 'text', value, onChange, placeholder, required = false, disabled = false, className, style, name }: MedInputProps) => (
+export const MedInput = ({ label, type = 'text', value, onChange, placeholder, required = false, disabled = false, className, style, name, onKeyDown, onKeyPress }: MedInputProps) => (
   <div className={`med-input-group ${className || ''}`} style={style}>
     {label && <label className="med-label">{label}</label>}
     <input
@@ -229,6 +232,8 @@ export const MedInput = ({ label, type = 'text', value, onChange, placeholder, r
       name={name}
       value={value}
       onChange={onChange}
+      onKeyDown={onKeyDown}
+      onKeyPress={onKeyPress}
       placeholder={placeholder}
       required={required}
       disabled={disabled}

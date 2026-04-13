@@ -4,7 +4,7 @@ const appointmentSchema = new mongoose.Schema(
   {
     patientId: { type: String, required: true, index: true },
     patientName: { type: String, required: true },
-    patientEmail: { type: String },
+    patientEmail: { type: String, required: true },
 
     doctorId: { type: String, required: true, index: true },
     doctorName: { type: String, required: true },
@@ -12,9 +12,9 @@ const appointmentSchema = new mongoose.Schema(
 
     slotDate: { type: String, required: true },
     slotTime: { type: String, required: true },
-    reason: { type: String },
-
+    reason: { type: String, required: true },
     consultationFee: { type: Number, required: true, min: 0 },
+
     paymentStatus: { type: String, enum: ['unpaid', 'paid', 'refunded'], default: 'unpaid' },
     paymentId: { type: String },
 

@@ -13,19 +13,20 @@ const getCookie = (name: string) => {
   return match ? decodeURIComponent(match[2]) : null;
 };
 
+export const getAuthToken = () => {
+  if (typeof window === 'undefined') return null;
+  return getCookie('medsync_token') || localStorage.getItem('medsync_token');
+};
+
 const getAuthHeaders = (): HeadersInit => {
-  const token = typeof window !== 'undefined'
-    ? (getCookie('medsync_token') || localStorage.getItem('medsync_token'))
-    : null;
+  const token = getAuthToken();
   const headers: HeadersInit = { 'Content-Type': 'application/json' };
   if (token) (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   return headers;
 };
 
 const getAuthHeadersNoContentType = (): HeadersInit => {
-  const token = typeof window !== 'undefined'
-    ? (getCookie('medsync_token') || localStorage.getItem('medsync_token'))
-    : null;
+  const token = getAuthToken();
   const headers: HeadersInit = {};
   if (token) (headers as Record<string, string>)['Authorization'] = `Bearer ${token}`;
   return headers;
@@ -38,7 +39,7 @@ const parseOrThrow = async (response: Response, fallbackMessage: string) => {
       const error = await response.json();
       if (error?.message) message = error.message;
     } catch {
-      /* response was not JSON */
+      /* not JSON */
     }
     throw new Error(message);
   }
@@ -53,8 +54,9 @@ export const patientApi = {
     return parseOrThrow(response, 'Invalid patient credentials');
   },
   register: async (data: any) => {
+    const { role: _role, ...payload } = data;
     const response = await fetch(`${PATIENT_SERVICE_URL}/register`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
     return parseOrThrow(response, 'Failed to register patient');
   },
@@ -115,6 +117,18 @@ export const patientApi = {
     const response = await fetch(`${PATIENT_SERVICE_URL}/${patientId}/full`, { headers: getAuthHeaders() });
     return parseOrThrow(response, 'Failed to fetch patient record');
   },
+  getPatientProfile: async (patientId: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/${patientId}`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch patient profile');
+  },
+  getPatientRecords: async (patientId: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/${patientId}/records`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch patient records');
+  },
+  getPatientDocuments: async (patientId: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/${patientId}/documents`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch patient documents');
+  },
   listAllPatients: async () => {
     const response = await fetch(PATIENT_SERVICE_URL, { headers: getAuthHeaders() });
     return parseOrThrow(response, 'Failed to list patients');
@@ -146,8 +160,9 @@ export const doctorApi = {
     return parseOrThrow(response, 'Invalid doctor credentials');
   },
   register: async (data: any) => {
+    const { role: _role, ...payload } = data;
     const response = await fetch(`${DOCTOR_SERVICE_URL}/register`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload),
     });
     return parseOrThrow(response, 'Failed to register doctor');
   },
@@ -166,6 +181,20 @@ export const doctorApi = {
       method: 'DELETE', headers: getAuthHeaders(),
     });
     return parseOrThrow(response, 'Failed to delete slot');
+  },
+  getAnalytics: async (id: string) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/${id}/analytics`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch analytics');
+  },
+  issuePrescription: async (data: any) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/prescriptions`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to issue prescription');
+  },
+  verifyPrescription: async (verificationId: string) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/prescriptions/verify/${verificationId}`);
+    return parseOrThrow(response, 'Prescription not found or invalid');
   },
 };
 
@@ -201,6 +230,10 @@ export const appointmentApi = {
     const response = await fetch(`${APPOINTMENT_SERVICE_URL}/doctor/${doctorId}`, { headers: getAuthHeaders() });
     return parseOrThrow(response, 'Failed to fetch doctor appointments');
   },
+  getBookedSlots: async (doctorId: string, date: string) => {
+    const response = await fetch(`${APPOINTMENT_SERVICE_URL}/available-slots/${doctorId}?date=${date}`);
+    return parseOrThrow(response, 'Failed to fetch booked slots');
+  },
   updateStatus: async (id: string, data: { status: string; cancelledBy?: string; cancellationReason?: string; notes?: string }) => {
     const response = await fetch(`${APPOINTMENT_SERVICE_URL}/${id}/status`, {
       method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(data),
@@ -226,10 +259,14 @@ export const appointmentApi = {
     const response = await fetch(url, { headers: getAuthHeaders() });
     return parseOrThrow(response, 'Failed to list appointments');
   },
+  adminGetAllAppointments: async () => {
+    const response = await fetch(APPOINTMENT_SERVICE_URL, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch all appointments');
+  },
 };
 
 export const telemedicineApi = {
-  createSession: async (data: { appointmentId: string; doctorId: string; patientId: string }) => {
+  createSession: async (data: { appointmentId: string; doctorId: string; patientId: string; signalingUrl?: string }) => {
     const response = await fetch(TELEMEDICINE_SERVICE_URL, {
       method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data),
     });
@@ -261,5 +298,9 @@ export const paymentApi = {
   listAllPayments: async () => {
     const response = await fetch(`${PAYMENT_SERVICE_URL}/admin/all`, { headers: getAuthHeaders() });
     return parseOrThrow(response, 'Failed to list payments');
+  },
+  adminGetAllPayments: async () => {
+    const response = await fetch(PAYMENT_SERVICE_URL, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch all system payments');
   },
 };
