@@ -59,7 +59,7 @@ export default function TelemedicineSession() {
   const [jitsiLoaded, setJitsiLoaded] = useState(false);
 
   // Transcription & AI Intelligence State
-  const [socket, setSocket] = useState<Socket | null>(null);
+  const [externalTranscript, setExternalTranscript] = useState<{ text: string; sender: string } | null>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [transcript, setTranscript] = useState('');
   const [patientTranscript, setPatientTranscript] = useState('');
@@ -133,23 +133,18 @@ export default function TelemedicineSession() {
        setJitsiApi(api);
        setInCall(true);
 
-       // Initialize Metadata Bridge (Socket 3004)
-       const serverAddr = window.location.hostname === 'localhost' ? 'http://localhost:3004' : `http://${window.location.hostname}:3004`;
-       const newSocket = io(serverAddr);
-       newSocket.emit('join_room', appointmentId);
-       
-       newSocket.on('relay_message', (data) => {
-          if (data.type === 'transcript') {
-             setPatientTranscript(prev => prev + ' ' + data.text);
+       // Real-time Voice Relay via Jitsi Data Channels (Automatic, No IPs needed)
+       api.on('endpointTextMessageReceived', (event: any) => {
+          if (event.eventData.name === 'transcript-relay') {
+             setExternalTranscript({ 
+                text: event.eventData.text, 
+                sender: event.eventData.senderName || 'Patient' 
+             });
           }
        });
 
-       setSocket(newSocket);
-
-
        return () => {
           api.dispose();
-          newSocket.disconnect();
        };
     }
   }, [jitsiLoaded, appointment, user, appointmentId]);
@@ -252,6 +247,22 @@ export default function TelemedicineSession() {
       showToast('Error loading session data', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const broadcastScribe = (text: string) => {
+    if (!jitsiApi) return;
+    try {
+      const participants = jitsiApi.getParticipantsInfo();
+      participants.forEach((p: any) => {
+        jitsiApi.executeCommand('sendEndpointTextMessage', p.participantId, {
+          name: 'transcript-relay',
+          text: text,
+          senderName: user?.role === 'doctor' ? `Dr. ${user.name}` : user?.name
+        });
+      });
+    } catch (e) {
+      console.error('Failed to broadcast transcript', e);
     }
   };
 
@@ -398,7 +409,11 @@ export default function TelemedicineSession() {
 
           {/* Background Scribe for Patients (Relays voice to doctor) */}
           {user?.role === 'patient' && (
-             <AIVoiceScribe hidden socket={socket} roomId={appointmentId as string} />
+             <AIVoiceScribe 
+                hidden 
+                onLocalTranscript={broadcastScribe} 
+                externalTranscript={externalTranscript} 
+             />
           )}
 
           {/* Sidebar / Tools - Only for Doctor */}
@@ -432,7 +447,10 @@ export default function TelemedicineSession() {
                   <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }} className="custom-scrollbar">
                       {activeTab === 'ai' && (
                          <div style={{ height: '550px', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--card-border)' }}>
-                            <AIVoiceScribe socket={socket} roomId={appointmentId as string} />
+                            <AIVoiceScribe 
+                               onLocalTranscript={broadcastScribe} 
+                               externalTranscript={externalTranscript}
+                            />
                          </div>
                       )}
 
