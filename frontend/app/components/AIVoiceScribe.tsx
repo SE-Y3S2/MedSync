@@ -36,7 +36,7 @@ async function analyseWithGroq(transcript: string) {
       "Authorization": `Bearer ${GROQ_KEY}`,
     },
     body: JSON.stringify({
-      model: "llama3-8b-8192",
+      model: "llama-3.3-70b-versatile",
       temperature: 0.3,
       max_tokens: 800,
       messages: [
@@ -87,22 +87,95 @@ function Spinner() {
   );
 }
 
-// ── main component ────────────────────────────────────────────
+interface AIVoiceScribeProps {
+  socket?: any;
+  roomId?: string;
+}
 
-export default function AIVoiceScribe() {
+export default function AIVoiceScribe({ socket, roomId }: AIVoiceScribeProps) {
   const [listening,  setListening]  = useState(false);
   const [transcript, setTranscript] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState("");
   const [analysis,   setAnalysis]   = useState<any>(null);
   const [analysing,  setAnalysing]  = useState(false);
   const [error,      setError]      = useState("");
   const [tab,        setTab]        = useState("analysis");
   const [snapshots,  setSnapshots]  = useState<any[]>([]);
+  const [volume,     setVolume]     = useState(0);
 
   const recRef      = useRef<any>(null);
   const timerRef    = useRef<any>(null);
-  const tRef        = useRef("");   // always-current transcript for async callbacks
+  const tRef        = useRef("");   
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const streamRef   = useRef<MediaStream | null>(null);
 
   useEffect(() => { tRef.current = transcript; }, [transcript]);
+
+  // Socket listener for remote transcripts
+  useEffect(() => {
+    if (socket && roomId) {
+      const handler = (data: any) => {
+        if (data.type === "transcript" && data.text) {
+          setTranscript(prev => prev + "\n(Patient): " + data.text + " ");
+          scheduleAnalysis();
+        }
+      };
+      socket.on("relay_message", handler);
+      return () => { socket.off("relay_message", handler); };
+    }
+  }, [socket, roomId]);
+
+  // Visualizer Logic (Canvas Waveform)
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  
+  const startVisualizer = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      audioCtxRef.current = ctx;
+      const src = ctx.createMediaStreamSource(stream);
+      const ana = ctx.createAnalyser();
+      ana.fftSize = 512;
+      src.connect(ana);
+      
+      const data = new Uint8Array(ana.frequencyBinCount);
+      const canvas = canvasRef.current;
+      const cc = canvas?.getContext('2d');
+
+      const draw = () => {
+        if (!audioCtxRef.current || !canvas || !cc) return;
+        ana.getByteFrequencyData(data);
+        
+        // Update simple volume state for other UI
+        const avg = data.reduce((a, b) => a + b) / data.length;
+        setVolume(avg);
+
+        // Draw waveform
+        cc.clearRect(0, 0, canvas.width, canvas.height);
+        cc.fillStyle = '#22c55e';
+        const barWidth = (canvas.width / data.length) * 2.5;
+        let x = 0;
+        for (let i = 0; i < data.length; i++) {
+          const barHeight = (data[i] / 255) * canvas.height;
+          cc.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+          x += barWidth + 1;
+        }
+        requestAnimationFrame(draw);
+      };
+      draw();
+    } catch (e) {
+      console.warn("Visualizer failed", e);
+      setError("Microphone Hardware Error: Could not connect to any audio input.");
+    }
+  };
+
+  const stopVisualizer = () => {
+    streamRef.current?.getTracks().forEach(t => t.stop());
+    audioCtxRef.current?.close();
+    audioCtxRef.current = null;
+    setVolume(0);
+  };
 
   const runAnalysis = useCallback(async () => {
     const t = tRef.current.trim();
@@ -122,13 +195,13 @@ export default function AIVoiceScribe() {
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(runAnalysis, ANALYSIS_DELAY_MS);
   }, [runAnalysis]);
-
   const toggle = useCallback(() => {
     if (listening) {
       recRef.current?.stop();
       recRef.current = null;
       setListening(false);
       clearTimeout(timerRef.current);
+      stopVisualizer();
       return;
     }
 
@@ -144,51 +217,73 @@ export default function AIVoiceScribe() {
 
     const rec = new SR();
     rec.continuous     = true;
-    rec.interimResults = false;
+    rec.interimResults = true; // Changed to true for real-time feedback
     rec.lang           = "en-US";
 
     rec.onstart = () => {
       setListening(true);
       setError("");
+      console.log("Speech recognition started");
     };
 
     rec.onresult = (e: any) => {
-      let added = "";
+      let final = "";
+      let interim = "";
+      
       for (let i = e.resultIndex; i < e.results.length; i++) {
-        if (e.results[i].isFinal) added += e.results[i][0].transcript + " ";
+        const text = e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          final += text + " ";
+        } else {
+          interim += text;
+        }
       }
-      if (added) {
-        setTranscript(prev => prev + added);
+
+      setInterimTranscript(interim);
+      if (final) {
+        setTranscript(prev => prev + final);
+        
+        // RELAY via socket if available
+        if (socket && roomId) {
+          socket.emit("relay_message", { roomId, type: "transcript", text: final });
+        }
+
         scheduleAnalysis();
       }
     };
 
     rec.onerror = (e: any) => { 
+      console.error("Speech Recognition Error:", e.error);
       if (e.error === 'not-allowed') {
-        setError("Microphone access denied. Please check browser permissions.");
+        setError("Microphone access denied. Please click the 'Lock' icon in your browser address bar and allow microphone access for this site.");
         setListening(false);
+        stopVisualizer();
+      } else if (e.error === 'network') {
+        setError("Network error: Speech recognition requires an active internet connection to process voice.");
       } else if (e.error !== "no-speech") {
         setError("Mic Error: " + e.error);
       }
     };
 
     rec.onend = () => { 
-      // Only restart if we are still supposed to be listening
+      console.log("Speech recognition ended");
       if (recRef.current && listening) {
-        try { recRef.current.start(); } catch(err) { console.error("Auto-restart failed", err); }
+        try { recRef.current.start(); } catch(err) { /* ignore restart errors */ }
       } else {
         setListening(false);
+        stopVisualizer();
       }
     };
 
     recRef.current = rec;
     try {
       rec.start();
+      startVisualizer();
     } catch (err) {
-      setError("Failed to start microphone.");
+      setError("Failed to start microphone. Please refresh the page.");
       setListening(false);
     }
-  }, [listening, scheduleAnalysis]);
+  }, [listening, scheduleAnalysis, socket, roomId]);
 
   const clear = () => { setTranscript(""); setAnalysis(null); setError(""); };
 
@@ -246,8 +341,14 @@ export default function AIVoiceScribe() {
 
         {/* LEFT — transcript */}
         <div style={c.left}>
-          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: "center" }}>
             <span style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>Live Transcript</span>
+            {listening && (
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 800 }}>LIVE MIC </span>
+                <canvas ref={canvasRef} width="100" height="20" style={{ background: "#f1f5f9", borderRadius: 4 }} />
+              </div>
+            )}
           </div>
 
           {error && (
@@ -261,12 +362,15 @@ export default function AIVoiceScribe() {
             padding: 15, minHeight: 150, fontSize: 14, lineHeight: 1.75,
             color: "#1e293b", whiteSpace: "pre-wrap",
           }}>
-            {transcript || (
+            {transcript || interimTranscript || (
               <span style={{ color: "#94a3b8", fontStyle: "italic" }}>
                 {listening
                   ? "Listening… speak clearly. Both doctor and patient voices will be captured."
                   : "Click 'Start Listening' to begin."}
               </span>
+            )}
+            {interimTranscript && (
+              <span style={{ color: "#64748b", opacity: 0.7 }}>{interimTranscript}</span>
             )}
           </div>
 

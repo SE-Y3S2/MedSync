@@ -427,7 +427,7 @@ export default function TelemedicineSession() {
                   <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }} className="custom-scrollbar">
                       {activeTab === 'ai' && (
                          <div style={{ height: '550px', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--card-border)' }}>
-                            <AIVoiceScribe />
+                            <AIVoiceScribe socket={socket} roomId={appointmentId as string} />
                          </div>
                       )}
 
