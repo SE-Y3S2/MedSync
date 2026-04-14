@@ -135,11 +135,22 @@ export default function AIVoiceScribe() {
     const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SR) { setError("Use Chrome or Edge — Firefox doesn't support speech recognition."); return; }
     if (!GROQ_KEY) { setError("Add process.env.NEXT_PUBLIC_GROQ_KEY=gsk_... to your .env"); return; }
+    
+    // Check for Secure Context (HTTPS) - required for Web Speech API on non-localhost
+    if (!window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      setError("HTTPS REQUIRED: Voice recognition is disabled by your browser on insecure connections. Please use HTTPS or localhost.");
+      return;
+    }
 
     const rec = new SR();
     rec.continuous     = true;
     rec.interimResults = false;
     rec.lang           = "en-US";
+
+    rec.onstart = () => {
+      setListening(true);
+      setError("");
+    };
 
     rec.onresult = (e: any) => {
       let added = "";
@@ -152,13 +163,31 @@ export default function AIVoiceScribe() {
       }
     };
 
-    rec.onerror = (e: any) => { if (e.error !== "no-speech") setError("Mic: " + e.error); };
-    rec.onend   = () => { if (recRef.current) rec.start(); }; // auto-restart
+    rec.onerror = (e: any) => { 
+      if (e.error === 'not-allowed') {
+        setError("Microphone access denied. Please check browser permissions.");
+        setListening(false);
+      } else if (e.error !== "no-speech") {
+        setError("Mic Error: " + e.error);
+      }
+    };
+
+    rec.onend = () => { 
+      // Only restart if we are still supposed to be listening
+      if (recRef.current && listening) {
+        try { recRef.current.start(); } catch(err) { console.error("Auto-restart failed", err); }
+      } else {
+        setListening(false);
+      }
+    };
 
     recRef.current = rec;
-    rec.start();
-    setListening(true);
-    setError("");
+    try {
+      rec.start();
+    } catch (err) {
+      setError("Failed to start microphone.");
+      setListening(false);
+    }
   }, [listening, scheduleAnalysis]);
 
   const clear = () => { setTranscript(""); setAnalysis(null); setError(""); };
