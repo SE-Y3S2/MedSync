@@ -433,7 +433,7 @@ export default function TelemedicineSession() {
                        className={`tab-button ${activeTab === 'records' ? 'active' : ''}`}
                        style={{ flex: 1, padding: '16px 12px', fontSize: '0.8rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
                      >
-                       <FileText size={16} /> History
+                       <FileText size={16} /> Records
                      </button>
                      <button 
                         onClick={() => setActiveTab('prescription')}
@@ -456,7 +456,7 @@ export default function TelemedicineSession() {
 
                      {activeTab === 'records' && (
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                           <h4 style={{ fontSize: '0.9rem', fontWeight: 700 }}>Medical Reports Review</h4>
+                           <h4 style={{ fontSize: '0.9rem', fontWeight: 700 }}>Patient Records Review</h4>
                            {loadingRecords ? (
                               <div style={{ padding: '40px 0', textAlign: 'center' }}>Loading...</div>
                            ) : patientRecords.length === 0 ? (
