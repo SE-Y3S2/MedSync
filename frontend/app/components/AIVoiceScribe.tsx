@@ -88,12 +88,12 @@ function Spinner() {
 }
 
 interface AIVoiceScribeProps {
-  socket?: any;
-  roomId?: string;
   hidden?: boolean;
+  onLocalTranscript?: (text: string) => void;
+  externalTranscript?: { text: string; sender: string } | null;
 }
 
-export default function AIVoiceScribe({ socket, roomId, hidden }: AIVoiceScribeProps) {
+export default function AIVoiceScribe({ hidden, onLocalTranscript, externalTranscript }: AIVoiceScribeProps) {
   const [listening,  setListening]  = useState(false);
   const [transcript, setTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
@@ -113,19 +113,6 @@ export default function AIVoiceScribe({ socket, roomId, hidden }: AIVoiceScribeP
   useEffect(() => { tRef.current = transcript; }, [transcript]);
 
 
-  // Socket listener for remote transcripts
-  useEffect(() => {
-    if (socket && roomId) {
-      const handler = (data: any) => {
-        if (data.type === "transcript" && data.text) {
-          setTranscript(prev => prev + "\n(Patient): " + data.text + " ");
-          scheduleAnalysis();
-        }
-      };
-      socket.on("relay_message", handler);
-      return () => { socket.off("relay_message", handler); };
-    }
-  }, [socket, roomId]);
 
   // Visualizer Logic (Canvas Waveform)
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -197,6 +184,14 @@ export default function AIVoiceScribe({ socket, roomId, hidden }: AIVoiceScribeP
     clearTimeout(timerRef.current);
     timerRef.current = setTimeout(runAnalysis, ANALYSIS_DELAY_MS);
   }, [runAnalysis]);
+
+  // Use external transcript from Jitsi Data Channel
+  useEffect(() => {
+    if (externalTranscript?.text) {
+      setTranscript(prev => prev + `\n(${externalTranscript.sender}): ` + externalTranscript.text + " ");
+      scheduleAnalysis();
+    }
+  }, [externalTranscript, scheduleAnalysis]);
   const toggle = useCallback(() => {
     if (listening) {
       recRef.current?.stop();
@@ -245,9 +240,9 @@ export default function AIVoiceScribe({ socket, roomId, hidden }: AIVoiceScribeP
       if (final) {
         setTranscript(prev => prev + final);
         
-        // RELAY via socket if available
-        if (socket && roomId) {
-          socket.emit("relay_message", { roomId, type: "transcript", text: final });
+        // RELAY via Jitsi (Parent Callback)
+        if (onLocalTranscript) {
+          onLocalTranscript(final);
         }
 
         scheduleAnalysis();
@@ -285,7 +280,7 @@ export default function AIVoiceScribe({ socket, roomId, hidden }: AIVoiceScribeP
       setError("Failed to start microphone. Please refresh the page.");
       setListening(false);
     }
-  }, [listening, scheduleAnalysis, socket, roomId, hidden]);
+  }, [listening, scheduleAnalysis, hidden]);
 
   // Auto-start if hidden (background mode)
   useEffect(() => {
@@ -300,7 +295,7 @@ export default function AIVoiceScribe({ socket, roomId, hidden }: AIVoiceScribeP
 
   const clear = () => { setTranscript(""); setAnalysis(null); setError(""); };
 
-  if (hidden) return <div style={{ display: 'none' }} aria-hidden="true" />;
+  if (hidden && !error) return null;
 
   // ── styles ────────────────────────────────────────────────
 
@@ -357,7 +352,9 @@ export default function AIVoiceScribe({ socket, roomId, hidden }: AIVoiceScribeP
         {/* LEFT — transcript */}
         <div style={c.left}>
           <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10, alignItems: "center" }}>
-            <span style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>Live Transcript</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: "#334155" }}>
+              {hidden ? "AI Voice Tracking (Patient Side)" : "Live Transcript"}
+            </span>
             {listening && (
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 10, color: "#22c55e", fontWeight: 800 }}>LIVE MIC </span>
