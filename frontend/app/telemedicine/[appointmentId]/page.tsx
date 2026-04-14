@@ -396,6 +396,11 @@ export default function TelemedicineSession() {
             </div>
           </div>
 
+          {/* Background Scribe for Patients (Relays voice to doctor) */}
+          {user?.role === 'patient' && (
+             <AIVoiceScribe hidden socket={socket} roomId={appointmentId as string} />
+          )}
+
           {/* Sidebar / Tools - Only for Doctor */}
           {user?.role === 'doctor' && (
             <div style={{ width: '380px', display: 'flex', flexDirection: 'column', gap: '16px', minHeight: 0 }}>
