@@ -15,7 +15,7 @@ import { Mic, MicOff, Video, VideoOff, PhoneOff, Bot, FileText, Clipboard, Alert
 import { MedButton as Button, Modal, MedInput as Input, showToast } from '../../components/UI';
 import SignatureCanvas from 'react-signature-canvas';
 import { io, Socket } from 'socket.io-client';
-
+import AIVoiceScribe from '../../components/AIVoiceScribe';
 interface PrescriptionItem {
   id: string;
   medication: string;
@@ -498,77 +498,8 @@ export default function TelemedicineSession() {
 
                   <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }} className="custom-scrollbar">
                       {activeTab === 'ai' && (
-                         <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
-                             {/* Combined Transcription Feed */}
-                             <div style={{ padding: '16px', background: 'var(--bg-main)', borderRadius: 'var(--radius-lg)', border: '1px solid var(--card-border)', maxHeight: '300px', overflowY: 'auto', position: 'relative' }} className="custom-scrollbar">
-                                <style>{`
-                                   @keyframes clinicalPulse {
-                                      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
-                                      70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); }
-                                      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
-                                   }
-                                   .scribe-pulse {
-                                      display: inline-block;
-                                      width: 8px;
-                                      height: 8px;
-                                      border-radius: 50%;
-                                      background: #22c55e;
-                                      animation: clinicalPulse 2s infinite;
-                                   }
-                                `}</style>
-                                <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                      {isScribeListening ? <span className="scribe-pulse"></span> : <span style={{ width: '8px', height: '8px', background: 'var(--text-muted)', borderRadius: '50%' }}></span>}
-                                      Live Clinical Scribe {isScribeListening && <span style={{ color: '#22c55e', fontSize: '0.6rem', marginLeft: '4px' }}>(Listening)</span>}
-                                   </div>
-                                   <button 
-                                      onClick={manualSyncScribe} 
-                                      style={{ background: 'none', border: 'none', color: 'var(--primary)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '0.65rem', fontWeight: 700 }}
-                                   >
-                                      <Network size={12} /> Sync Scribe
-                                   </button>
-                                </div>
-                                <div style={{ fontSize: '0.85rem', lineHeight: 1.6, color: 'var(--text-main)' }}>
-                                   <div style={{ marginBottom: '8px', borderBottom: '1px solid var(--card-border)', paddingBottom: '4px' }}>
-                                      <span style={{ fontWeight: 700, color: 'var(--primary)' }}>Doctor:</span> {transcript || '...'}
-                                   </div>
-                                   <div>
-                                      <span style={{ fontWeight: 700, color: 'var(--success)' }}>Patient:</span> {patientTranscript || '...'}
-                                   </div>
-                                </div>
-                             </div>
-
-                            {/* Risk Identification Panel */}
-                            <div style={{ padding: '16px', background: 'rgba(239, 68, 68, 0.05)', borderRadius: 'var(--radius-lg)', border: '1px solid rgba(239, 68, 68, 0.1)' }}>
-                               <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--error)', textTransform: 'uppercase', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                  <AlertCircle size={14} /> Intelligence: Risk identification
-                               </div>
-                               {detectedRisks.length > 0 ? (
-                                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                                     {detectedRisks.map((risk, i) => (
-                                        <div key={i} style={{ padding: '8px 12px', background: 'white', borderRadius: '8px', borderLeft: '3px solid var(--error)', fontSize: '0.8rem', fontWeight: 600, boxShadow: 'var(--shadow-sm)' }}>
-                                           {risk}
-                                        </div>
-                                     ))}
-                                  </div>
-                               ) : (
-                                  <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', fontStyle: 'italic' }}>Evaluating conversation for clinical red flags...</div>
-                               )}
-                            </div>
-
-                            {/* AI Summary Panel */}
-                            <div className="med-card" style={{ padding: '16px', height: 'auto', marginBottom: 0 }}>
-                               <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--primary)', textTransform: 'uppercase', marginBottom: '12px' }}>Clinical Findings Summary</div>
-                               {isAnalyzing ? (
-                                  <div style={{ textAlign: 'center', padding: '20px' }}><div className="loading-spinner sm"></div></div>
-                               ) : aiAnalysis ? (
-                                  <div style={{ fontSize: '0.85rem', color: 'var(--text-main)', lineHeight: 1.5 }}>
-                                     {aiAnalysis.aiSummary}
-                                  </div>
-                               ) : (
-                                  <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>Analysis will appear as you discuss symptoms.</p>
-                               )}
-                            </div>
+                         <div style={{ height: '550px', borderRadius: '10px', overflow: 'hidden', border: '1px solid var(--card-border)' }}>
+                            <AIVoiceScribe />
                          </div>
                       )}
 
@@ -787,21 +718,6 @@ export default function TelemedicineSession() {
            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
         }
       `}</style>
-      {/* Professional Connection Status Indicator */}
-      <div style={{
-        position: 'fixed', bottom: '24px', right: '24px', zIndex: 2000,
-        background: 'rgba(15, 23, 42, 0.9)', backdropFilter: 'blur(12px)',
-        padding: '10px 18px', borderRadius: '14px', border: '1px solid rgba(255,255,255,0.1)',
-        display: 'flex', alignItems: 'center', gap: '10px', color: 'white', fontSize: '12px', fontWeight: 600,
-        boxShadow: '0 8px 30px rgba(0,0,0,0.3)', pointerEvents: 'none'
-      }}>
-        <div style={{ 
-          width: '8px', height: '8px', borderRadius: '50%', 
-          background: inCall ? '#10b981' : '#f59e0b',
-          boxShadow: inCall ? '0 0 12px #10b981' : '0 0 12px #f59e0b'
-        }} />
-        {inCall ? 'Secured Medical Bridge Active' : 'Connecting to Cloud...'}
-      </div>
     </div>
   );
 }

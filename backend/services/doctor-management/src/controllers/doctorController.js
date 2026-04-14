@@ -173,11 +173,14 @@ exports.getAnalytics = async (req, res) => {
       const d = new Date();
       d.setDate(d.getDate() - i);
       const dateStr = d.toISOString().split('T')[0];
-      const match = prescriptionTrend.find((p) => p._id === dateStr);
+      const match = prescriptionTrend.find(p => p._id === dateStr);
+      
+      // For this assignment, we use real prescription counts.
+      // We will leave 'appointments' for the frontend to overlay from the Appointment Service.
       chartData.push({
         date: dateStr,
         prescriptions: match ? match.count : 0,
-        appointments: Math.floor(Math.random() * 5) + 2,
+        appointments: 0 // Will be populated or calculated by frontend from appointment stats
       });
     }
 

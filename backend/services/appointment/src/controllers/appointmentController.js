@@ -385,14 +385,24 @@ exports.getDoctorStats = async (req, res, next) => {
         }
 
         const { doctorId } = req.params;
-        const [total, pending, confirmed, completed, cancelled] = await Promise.all([
+        const [total, pending, confirmed, completed, cancelled, earningsData] = await Promise.all([
             Appointment.countDocuments({ doctorId }),
             Appointment.countDocuments({ doctorId, status: 'pending' }),
             Appointment.countDocuments({ doctorId, status: 'confirmed' }),
             Appointment.countDocuments({ doctorId, status: 'completed' }),
             Appointment.countDocuments({ doctorId, status: 'cancelled' }),
+            Appointment.aggregate([
+                { $match: { doctorId, status: 'completed' } },
+                { $group: { _id: null, total: { $sum: '$consultationFee' } } }
+            ])
         ]);
-        res.json({ total, pending, confirmed, completed, cancelled });
+
+        const totalEarnings = earningsData.length > 0 ? earningsData[0].total : 0;
+        
+        // Completion rate: (completed / (completed + cancelled + rejected during confirmed state))
+        const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+        res.json({ total, pending, confirmed, completed, cancelled, totalEarnings, completionRate });
     } catch (error) {
         next(error);
     }
