@@ -69,8 +69,8 @@ export default function TelemedicineSession() {
   const [chatInput, setChatInput] = useState('');
   const [showChat, setShowChat] = useState(false);
   const [callEnded, setCallEnded] = useState(false);
-  const [isScribeListening, setIsScribeListening] = useState(false);
-  const recognitionRef = useRef<any>(null);
+
+
 
   // Media Controls State
   const [micEnabled, setMicEnabled] = useState(true);
@@ -146,8 +146,6 @@ export default function TelemedicineSession() {
 
        setSocket(newSocket);
 
-       // Start Speech Recognition for ALL participants (Scribe mode)
-       startSpeechRecognition(newSocket);
 
        return () => {
           api.dispose();
@@ -257,77 +255,7 @@ export default function TelemedicineSession() {
     }
   };
 
-   const startSpeechRecognition = (currentSocket: Socket | null) => {
-    if (typeof window === 'undefined') return;
-    
-    // Stop existing if any
-    if (recognitionRef.current) {
-       try { recognitionRef.current.stop(); } catch(e) {}
-    }
 
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-       console.error('MedSync: SpeechRecognition not supported in this browser.');
-       return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-       setIsScribeListening(true);
-       console.log('MedSync: AI Scribe Active & Listening');
-    };
-
-    recognition.onerror = (event: any) => {
-       console.error('MedSync Scribe Error:', event.error);
-       if (event.error === 'no-speech' || event.error === 'audio-capture' || event.error === 'network') {
-          setIsScribeListening(false);
-          // Auto-restart on non-fatal errors
-          setTimeout(() => { if (inCall) startSpeechRecognition(currentSocket); }, 1000);
-       }
-    };
-
-    recognition.onresult = (event: any) => {
-      let finalTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) finalTranscript += event.results[i][0].transcript;
-      }
-      if (finalTranscript.trim()) {
-        if (user?.role === 'doctor') {
-          setTranscript(prev => prev + ' ' + finalTranscript);
-        } else {
-           currentSocket?.emit('relay_message', {
-              roomId: appointmentId,
-              type: 'transcript',
-              text: finalTranscript
-           });
-        }
-      }
-    };
-
-    recognition.onend = () => { 
-       setIsScribeListening(false);
-       if (inCall && !callEnded) {
-          console.log('MedSync: Scribe ended unexpectedly, attempting self-healing restart...');
-          startSpeechRecognition(currentSocket); 
-       }
-    };
-
-    recognitionRef.current = recognition;
-    try {
-       recognition.start();
-    } catch (e) {
-       console.error('MedSync: Failed to start SpeechRecognition', e);
-    }
-  };
-
-  const manualSyncScribe = () => {
-     startSpeechRecognition(socket);
-     showToast('AI Scribe Resynchronized', 'success');
-  };
 
   const addMedication = () => {
     setMedications([...medications, { id: Date.now().toString(), medication: '', dosage: '', frequency: '', duration: '' }]);
