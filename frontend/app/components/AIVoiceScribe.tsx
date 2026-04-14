@@ -9,7 +9,7 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 //  - Add key to .env   : REACT_APP_GROQ_KEY=gsk_xxxxxxxxxxxx
 // ─────────────────────────────────────────────────────────────
 
-const GROQ_KEY = process.env.NEXT_PUBLIC_GROQ_KEY || "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";
+const GROQ_KEY = process.env.NEXT_PUBLIC_GROQ_KEY || "";
 const GROQ_URL = "https://api.groq.com/openai/v1/chat/completions";
 const ANALYSIS_DELAY_MS = 5000; // analyse after 5s of silence
 
