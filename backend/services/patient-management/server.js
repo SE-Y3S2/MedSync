@@ -5,6 +5,7 @@ require('dotenv').config({ path: path.join(__dirname, '../../../.env') });
 const mongoose = require('mongoose');
 const app = require('./src/app');
 const { connectProducer } = require('./src/utils/kafka');
+const { connectPrescriptionConsumer } = require('./src/prescriptionConsumer');
 
 const port = process.env.PORT || 3001;
 
@@ -21,6 +22,7 @@ const start = async () => {
   await mongoose.connect(uri, mongoOpts);
   console.log('[patient-management] MongoDB connected');
   await connectProducer();
+  await connectPrescriptionConsumer();
   app.listen(port, () => console.log(`[patient-management] listening on ${port}`));
 };
 

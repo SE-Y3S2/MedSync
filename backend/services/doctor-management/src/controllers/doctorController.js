@@ -291,6 +291,19 @@ exports.issuePrescription = async (req, res) => {
 
     await prescription.save();
 
+    // Notify other services (Patient Management) via Kafka
+    await sendEvent('doctor-events', {
+      type: 'PRESCRIPTION_ISSUED',
+      prescriptionId: prescription._id,
+      patientId: prescription.patientId,
+      patientName: prescription.patientName,
+      doctorName: prescription.doctorName,
+      medications: prescription.medications,
+      instructions: prescription.instructions,
+      verificationId: prescription.verificationId,
+      timestamp: new Date()
+    });
+
     const verifyUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/verify/${verificationId}`;
     const qrCodeBase64 = await qrcode.toDataURL(verifyUrl);
 
