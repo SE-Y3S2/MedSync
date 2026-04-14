@@ -185,7 +185,11 @@ exports.getDoctorAppointments = async (req, res, next) => {
         const filter = { doctorId: req.params.doctorId };
         if (status) filter.status = status;
         if (date) filter.slotDate = date;
+
+        console.log(`[Appointment Service] Fetching for doctorId: ${req.params.doctorId}, filter:`, JSON.stringify(filter));
         const appointments = await Appointment.find(filter).sort({ slotDate: 1, slotTime: 1 });
+        console.log(`[Appointment Service] Found ${appointments.length} appointments for doctor ${req.params.doctorId}`);
+        
         res.json(appointments);
     } catch (error) {
         next(error);
