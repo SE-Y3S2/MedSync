@@ -90,9 +90,10 @@ function Spinner() {
 interface AIVoiceScribeProps {
   socket?: any;
   roomId?: string;
+  hidden?: boolean;
 }
 
-export default function AIVoiceScribe({ socket, roomId }: AIVoiceScribeProps) {
+export default function AIVoiceScribe({ socket, roomId, hidden }: AIVoiceScribeProps) {
   const [listening,  setListening]  = useState(false);
   const [transcript, setTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
@@ -110,6 +111,7 @@ export default function AIVoiceScribe({ socket, roomId }: AIVoiceScribeProps) {
   const streamRef   = useRef<MediaStream | null>(null);
 
   useEffect(() => { tRef.current = transcript; }, [transcript]);
+
 
   // Socket listener for remote transcripts
   useEffect(() => {
@@ -223,7 +225,7 @@ export default function AIVoiceScribe({ socket, roomId }: AIVoiceScribeProps) {
     rec.onstart = () => {
       setListening(true);
       setError("");
-      console.log("Speech recognition started");
+      console.log("Speech recognition started " + (hidden ? "(Hidden Mode)" : ""));
     };
 
     rec.onresult = (e: any) => {
@@ -278,14 +280,27 @@ export default function AIVoiceScribe({ socket, roomId }: AIVoiceScribeProps) {
     recRef.current = rec;
     try {
       rec.start();
-      startVisualizer();
+      if (!hidden) startVisualizer();
     } catch (err) {
       setError("Failed to start microphone. Please refresh the page.");
       setListening(false);
     }
-  }, [listening, scheduleAnalysis, socket, roomId]);
+  }, [listening, scheduleAnalysis, socket, roomId, hidden]);
+
+  // Auto-start if hidden (background mode)
+  useEffect(() => {
+    if (hidden && !listening && !recRef.current) {
+      // Small delay to ensure browser readiness
+      const timer = setTimeout(() => {
+        try { toggle(); } catch (e) { console.error("Auto-start failed", e); }
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [hidden, listening, toggle]);
 
   const clear = () => { setTranscript(""); setAnalysis(null); setError(""); };
+
+  if (hidden) return <div style={{ display: 'none' }} aria-hidden="true" />;
 
   // ── styles ────────────────────────────────────────────────
 
