@@ -15,8 +15,15 @@ router.post('/checkout', auth, createCheckoutRules, ctrl.createCheckoutSession);
 // Admin: all payments + revenue summary (must come before `/:appointmentId`)
 router.get('/admin/all', auth, ctrl.listAllPayments);
 
+// Public verification endpoint for tamper-evident receipt hash
+router.get('/verify/:receiptHash', ctrl.verifyReceiptHash);
+
 // Payment history for a patient
 router.get('/patient/:id', auth, ctrl.getPatientPaymentHistory);
+
+// Receipt endpoints
+router.get('/:appointmentId/receipt/pdf', auth, ctrl.getReceiptPdf);
+router.post('/:appointmentId/receipt/email', auth, ctrl.sendReceiptEmail);
 
 // Payment details for a specific appointment
 router.get('/:appointmentId', auth, ctrl.getPaymentByAppointment);

@@ -19,6 +19,18 @@ const paymentSchema = new mongoose.Schema(
             default: 'pending',
         },
 
+        receiptNumber: { type: String, unique: true, sparse: true },
+        receiptHash: { type: String, unique: true, sparse: true },
+        receiptSentAt: { type: Date },
+        lastReceiptEmail: { type: String },
+
+        auditInsights: {
+            riskScore: { type: Number, default: 0 },
+            riskLevel: { type: String, enum: ['low', 'medium', 'high'], default: 'low' },
+            flags: { type: [String], default: [] },
+            lastEvaluatedAt: { type: Date },
+        },
+
         // Store Stripe metadata for audit
         metadata: { type: mongoose.Schema.Types.Mixed },
     },
