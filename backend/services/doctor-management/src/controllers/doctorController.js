@@ -318,8 +318,20 @@ exports.issuePrescription = async (req, res) => {
 
 exports.getPrescriptionByVerifyId = async (req, res) => {
   try {
-    const prescription = await Prescription.findOne({ verificationId: req.params.verificationId });
-    if (!prescription) return res.status(404).json({ message: 'Prescription not found or invalid.' });
+    const vid = req.params.verificationId;
+    
+    // 1. Try to find by verificationId (New records)
+    let prescription = await Prescription.findOne({ verificationId: vid });
+    
+    // 2. Fallback to _id if not found and it looks like a Mongo ID (Legacy records)
+    if (!prescription && vid.match(/^[0-9a-fA-F]{24}$/)) {
+      prescription = await Prescription.findById(vid);
+    }
+    
+    if (!prescription) {
+      return res.status(404).json({ message: 'Prescription not found or invalid.' });
+    }
+    
     res.json(prescription);
   } catch (error) {
     res.status(500).json({ message: error.message });

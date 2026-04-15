@@ -15,12 +15,14 @@ const prescriptionSchema = new mongoose.Schema({
   frequency: { type: String },
   duration: { type: String },
   instructions: { type: String },
-  prescribedBy: { type: String }
+  prescribedBy: { type: String },
+  verificationId: { type: String } // Link to digital certificate/QR
 });
 
 const documentSchema = new mongoose.Schema({
   fileName: { type: String, required: true },
   fileUrl: { type: String, required: true },
+  verificationId: { type: String }, // Link to digital prescription portal
   uploadDate: { type: Date, default: Date.now },
   type: { type: String, enum: ['Report', 'Scan', 'Prescription', 'Lab Result', 'Other'], default: 'Report' }
 });

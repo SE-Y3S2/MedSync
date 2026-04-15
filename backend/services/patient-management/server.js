@@ -10,6 +10,7 @@ const { connectPrescriptionConsumer } = require('./src/prescriptionConsumer');
 const port = process.env.PORT || 3001;
 
 const mongoOpts = {
+  dbName: 'medsync',
   serverSelectionTimeoutMS: 20000,
   connectTimeoutMS: 20000,
   socketTimeoutMS: 45000,
