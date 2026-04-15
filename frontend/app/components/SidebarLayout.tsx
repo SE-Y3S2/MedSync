@@ -49,14 +49,15 @@ export function SidebarLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, logout, isLoading } = useAuth();
   
-  // Routes where sidebar should NOT be displayed
-  const noSidebarRoutes = ['/', '/login', '/register'];
-  const showSidebar = !noSidebarRoutes.includes(pathname);
+  // Routes where sidebar should NOT be displayed (public routes)
+  const noSidebarRoutes = ['/', '/login', '/register', '/verify'];
+  const showSidebar = !noSidebarRoutes.some(route => pathname === route || pathname.startsWith(route + '/'));
 
   useEffect(() => {
-    if (isLoading) return;
+    // PUBLIC ROUTES - Never redirect or check auth
+    if (isLoading || !showSidebar || pathname.startsWith('/verify')) return;
 
-    if (showSidebar && !user) {
+    if (!user) {
       router.replace('/login');
       return;
     }
