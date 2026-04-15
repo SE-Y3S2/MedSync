@@ -198,7 +198,24 @@ export default function RecordsPage() {
                       {item.frequency && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Frequency: {item.frequency}</p>}
                       {item.duration && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Duration: {item.duration}</p>}
                       {item.instructions && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', fontStyle: 'italic' }}>{item.instructions}</p>}
-                      {item.prescribedBy && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>By: Dr. {item.prescribedBy}</p>}
+                      {item.prescribedBy && <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>By: {item.prescribedBy}</p>}
+                      
+                      <a 
+                        href={`/verify/${item.verificationId || 'missing'}`} 
+                        target="_blank"
+                        className={`med-link ${!item.verificationId ? 'disabled' : ''}`}
+                        style={{ 
+                          fontSize: '0.75rem', 
+                          color: item.verificationId ? '#3b82f6' : '#94a3b8', 
+                          fontWeight: 700, 
+                          textDecoration: 'none',
+                          marginTop: '10px',
+                          display: 'inline-block',
+                          pointerEvents: item.verificationId ? 'auto' : 'none'
+                        }}
+                      >
+                        {item.verificationId ? 'VIEW DIGITAL COPY & QR →' : 'PAPER-ONLY RECORD'}
+                      </a>
                     </div>
                     <Badge text={new Date(item.date).toLocaleDateString()} variant="info" />
                   </div>
@@ -288,7 +305,11 @@ export default function RecordsPage() {
                     </div>
                     <div className="doc-item-actions">
                       <a
-                        href={`${PATIENT_SERVICE_ORIGIN}/${doc.fileUrl}`}
+                        href={
+                          doc.verificationId 
+                            ? `/verify/${doc.verificationId}` 
+                            : `${process.env.NEXT_PUBLIC_PATIENT_SERVICE_URL?.replace('/api/patients', '') || 'http://localhost:3001'}/${doc.fileUrl?.replace(/\\/g, '/')}`
+                        }
                         target="_blank"
                         rel="noopener noreferrer"
                         className="med-button secondary sm"

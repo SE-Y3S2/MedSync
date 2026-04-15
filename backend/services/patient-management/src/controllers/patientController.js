@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Patient = require('../models/Patient');
+const Prescription = require('../models/Prescription'); // Added for historical recovery
 const { sendEvent } = require('../utils/kafka');
 const { JWT_SECRET } = require('../middleware/authMiddleware');
 
@@ -176,11 +177,74 @@ exports.listPatients = async (req, res) => {
 
 // ───── Medical Records ─────
 
-// Get medical history and prescriptions
+// Get medical history and prescriptions with automatic historical sync
 exports.getRecords = async (req, res) => {
   try {
-    const patient = await Patient.findById(req.user.patientId);
+    const patientId = req.user.patientId;
+    const patient = await Patient.findById(patientId);
     if (!patient) return res.status(404).json({ message: 'Patient not found' });
+
+    // --- HISTORICAL DATA RECOVERY ---
+    // If the patient is missing prescriptions that exist in the global prescriptions collection,
+    // we pull them in now. This fixes the sync gap caused by previous service crashes.
+    try {
+      const globalPrescriptions = await Prescription.find({ patientId });
+      
+      let hasNewData = false;
+      for (const gp of globalPrescriptions) {
+        // 1. Find if this prescription already exists locally
+        const existingLocalIndex = patient.prescriptions.findIndex(p => 
+          p.verificationId === gp.verificationId || 
+          (p.medication === gp.medications.map(m => m.medication).join(', ') && 
+           Math.abs(new Date(p.date) - new Date(gp.issuedAt)) < 60000)
+        );
+
+        if (existingLocalIndex !== -1) {
+          // REPAIR: If it exists but lacks a verificationId, attach it now
+          if (!patient.prescriptions[existingLocalIndex].verificationId) {
+            console.log(`[Recovery] Repairing missing verificationId for prescription ${gp._id}`);
+            patient.prescriptions[existingLocalIndex].verificationId = gp.verificationId || gp._id;
+            hasNewData = true;
+          }
+        } else {
+          // ADD NEW: Prescription doesn't exist locally at all
+          console.log(`[Recovery] Pushing missing prescription ${gp.verificationId || gp._id} to patient ${patientId}`);
+          patient.prescriptions.push({
+            date: gp.issuedAt || new Date(),
+            medication: gp.medications.map(m => m.medication).join(', '),
+            dosage: gp.medications.map(m => `${m.medication}: ${m.dosage}`).join(' | '),
+            frequency: gp.medications.map(m => m.frequency).join(', '),
+            duration: gp.medications.map(m => m.duration).join(', '),
+            instructions: gp.instructions,
+            prescribedBy: gp.doctorName ? `Dr. ${gp.doctorName}` : 'Doctor',
+            verificationId: gp.verificationId || gp._id
+          });
+          
+          // Also add to documents for consistency if not there
+          const docExists = patient.documents.some(d => d.verificationId === (gp.verificationId || gp._id));
+          if (!docExists) {
+            patient.documents.push({
+              fileName: `Prescription_${gp.verificationId || gp._id.toString()}.pdf`,
+              fileUrl: `/verify/${gp.verificationId || gp._id.toString()}`,
+              verificationId: gp.verificationId || gp._id.toString(),
+              uploadDate: new Date(),
+              type: 'Prescription'
+            });
+          }
+          hasNewData = true;
+        }
+      }
+
+      if (hasNewData) {
+        await patient.save();
+        console.log(`[Recovery] Successfully recovered historical data for patient ${patientId}`);
+      }
+    } catch (recoveryErr) {
+      console.error('[Recovery] Error during historical sync:', recoveryErr.message);
+      // Continue returning existing records even if recovery fails
+    }
+    // ---------------------------------
+
     res.status(200).json({
       medicalHistory: patient.medicalHistory,
       prescriptions: patient.prescriptions
@@ -283,9 +347,11 @@ exports.uploadDocument = async (req, res) => {
 
     const type = req.body.type || 'Report';
 
+    const fileUrl = req.file.path.replace(/\\/g, '/'); // Normalize slashes for URL compatibility
+    
     const newDoc = {
       fileName: req.file.originalname,
-      fileUrl: req.file.path,
+      fileUrl: fileUrl,
       type: type
     };
 

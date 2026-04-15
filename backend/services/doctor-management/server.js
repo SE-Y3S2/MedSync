@@ -9,6 +9,7 @@ const { connectProducer } = require('./src/utils/kafka');
 const port = process.env.PORT || 3002;
 
 const mongoOpts = {
+  dbName: 'medsync',
   serverSelectionTimeoutMS: 20000,
   connectTimeoutMS: 20000,
   socketTimeoutMS: 45000,
