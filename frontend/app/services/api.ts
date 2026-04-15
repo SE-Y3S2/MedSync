@@ -291,9 +291,44 @@ export const paymentApi = {
     });
     return parseOrThrow(response, 'Failed to create payment session');
   },
+  getPaymentByAppointment: async (appointmentId: string) => {
+    const response = await fetch(`${PAYMENT_SERVICE_URL}/${appointmentId}`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch payment details');
+  },
   getPatientPayments: async (patientId: string) => {
     const response = await fetch(`${PAYMENT_SERVICE_URL}/patient/${patientId}`, { headers: getAuthHeaders() });
     return parseOrThrow(response, 'Failed to fetch payments');
+  },
+  downloadReceiptPdf: async (appointmentId: string) => {
+    const response = await fetch(`${PAYMENT_SERVICE_URL}/${appointmentId}/receipt/pdf`, { headers: getAuthHeaders() });
+    if (!response.ok) {
+      let message = 'Failed to download receipt';
+      try {
+        const error = await response.json();
+        if (error?.message) message = error.message;
+      } catch {
+        /* not JSON */
+      }
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `medsync-receipt-${appointmentId}.pdf`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    window.URL.revokeObjectURL(url);
+  },
+  resendReceiptEmail: async (appointmentId: string, email?: string) => {
+    const response = await fetch(`${PAYMENT_SERVICE_URL}/${appointmentId}/receipt/email`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(email ? { email } : {}),
+    });
+    return parseOrThrow(response, 'Failed to send receipt email');
   },
   listAllPayments: async () => {
     const response = await fetch(`${PAYMENT_SERVICE_URL}/admin/all`, { headers: getAuthHeaders() });

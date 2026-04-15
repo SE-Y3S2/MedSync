@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { MedCard as Card, MedButton as Button, MedInput as Input, Badge, Skeleton, showToast, Tabs, Modal } from '../components/UI';
 import { appointmentApi, paymentApi } from '@/app/services/api';
-import { User, CalendarX, CalendarClock, CreditCard, ArrowRight, Clock3, CheckCircle2 } from 'lucide-react';
+import { User, CalendarX, CalendarClock, CreditCard, ArrowRight, Clock3, CheckCircle2, Download, Mail } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
 interface Appointment {
@@ -76,6 +76,24 @@ export default function AppointmentListPage() {
             fetchAppointments();
         } catch {
             showToast('Cancellation failed', 'error');
+        }
+    };
+
+    const handleDownloadReceipt = async (appointmentId: string) => {
+        try {
+            await paymentApi.downloadReceiptPdf(appointmentId);
+            showToast('Receipt downloaded', 'success');
+        } catch (err: any) {
+            showToast(err.message || 'Failed to download receipt', 'error');
+        }
+    };
+
+    const handleEmailReceipt = async (appointmentId: string) => {
+        try {
+            await paymentApi.resendReceiptEmail(appointmentId);
+            showToast('Receipt email sent', 'success');
+        } catch (err: any) {
+            showToast(err.message || 'Failed to send receipt email', 'error');
         }
     };
 
@@ -193,6 +211,16 @@ export default function AppointmentListPage() {
                                     <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                                         {appt.paymentStatus === 'unpaid' && ['pending', 'confirmed'].includes(appt.status) && (
                                             <Button size="sm" icon={<CreditCard size={14} />} onClick={() => handlePayment(appt)}>Pay now</Button>
+                                        )}
+                                        {appt.paymentStatus === 'paid' && (
+                                            <>
+                                                <Button size="sm" variant="secondary" icon={<Download size={14} />} onClick={() => handleDownloadReceipt(appt._id)}>
+                                                    Receipt PDF
+                                                </Button>
+                                                <Button size="sm" variant="secondary" icon={<Mail size={14} />} onClick={() => handleEmailReceipt(appt._id)}>
+                                                    Email receipt
+                                                </Button>
+                                            </>
                                         )}
                                         {['pending', 'confirmed'].includes(appt.status) && (
                                             <>
