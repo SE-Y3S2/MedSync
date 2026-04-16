@@ -30,21 +30,20 @@ export default function AdminDashboard() {
   const loadStats = async () => {
     try {
       setLoading(true);
-      const [doctors, patients, appts, payRes] = await Promise.all([
+      const [doctors, patientsRes, appts, payRes] = await Promise.all([
         doctorApi.listDoctors().catch(() => []),
-        patientApi.listAllPatients().catch(() => []),
+        patientApi.listAllPatients({ limit: 1 }).catch(() => ({ total: 0, items: [] })),
         appointmentApi.listAllAppointments().catch(() => []),
         paymentApi.listAllPayments().catch(() => ({ payments: [], totals: [] })),
       ]);
 
       const drs = Array.isArray(doctors) ? doctors : [];
-      const pts = Array.isArray(patients) ? patients : [];
       const as = Array.isArray(appts) ? appts : [];
 
       setStats({
         totalDoctors: drs.length,
         pendingDoctors: drs.filter((d: any) => !d.isVerified).length,
-        totalPatients: pts.length,
+        totalPatients: typeof patientsRes?.total === 'number' ? patientsRes.total : (patientsRes?.items?.length || 0),
         totalAppointments: as.length,
         pendingAppointments: as.filter((a: any) => a.status === 'pending').length,
         revenueRows: Array.isArray(payRes?.totals) ? payRes.totals : [],
