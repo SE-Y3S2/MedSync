@@ -176,9 +176,9 @@ exports.getPatientForProvider = async (req, res) => {
         dateOfBirth: patient.dateOfBirth,
         gender: patient.gender,
         bloodType: patient.bloodType,
-        allergies: patient.allergies,
-        chronicConditions: patient.chronicConditions,
-        emergencyContact: patient.emergencyContact,
+        allergies: patient.allergies || [],
+        chronicConditions: patient.chronicConditions || [],
+        emergencyContact: patient.emergencyContact || {},
       },
       vitalSigns: patient.vitalSigns.slice(-10),
       vaccinations: patient.vaccinations,
@@ -737,9 +737,9 @@ exports.getHealthScore = async (req, res) => {
     res.status(200).json({
       score,
       tier: score >= 85 ? 'excellent' : score >= 70 ? 'good' : score >= 50 ? 'fair' : 'attention required',
-      activeChronicConditions: patient.chronicConditions.filter((c) => c.status === 'active').length,
-      severeAllergies: patient.allergies.filter((a) => ['severe', 'life-threatening'].includes(a.severity)).length,
-      lastVitalRecord: patient.vitalSigns.slice(-1)[0] || null,
+      activeChronicConditions: (patient.chronicConditions || []).filter((c) => c.status === 'active').length,
+      severeAllergies: (patient.allergies || []).filter((a) => ['severe', 'life-threatening'].includes(a.severity)).length,
+      lastVitalRecord: (patient.vitalSigns || []).slice(-1)[0] || null,
       generatedAt: new Date(),
     });
   } catch (error) {
@@ -760,13 +760,13 @@ exports.getMedicalSummary = async (req, res) => {
 
     res.status(200).json({
       patient: { id: patient._id, name: `${patient.firstName} ${patient.lastName}`, dateOfBirth: patient.dateOfBirth, gender: patient.gender, bloodType: patient.bloodType },
-      criticalAllergies: patient.allergies.filter((a) => ['severe', 'life-threatening'].includes(a.severity)),
-      activeChronicConditions: patient.chronicConditions.filter((c) => c.status === 'active'),
-      activePrescriptions: prescriptions.filter((p) => p.status !== 'cancelled'),
-      lastVitals: patient.vitalSigns.slice(-3).reverse(),
-      recentRecords: patient.medicalHistory.slice(-5).reverse(),
-      vaccinationCount: patient.vaccinations.length,
-      familyHistorySize: patient.familyHistory.length,
+      criticalAllergies: (patient.allergies || []).filter((a) => ['severe', 'life-threatening'].includes(a.severity)),
+      activeChronicConditions: (patient.chronicConditions || []).filter((c) => c.status === 'active'),
+      activePrescriptions: (prescriptions || []).filter((p) => p.status !== 'cancelled'),
+      lastVitals: (patient.vitalSigns || []).slice(-3).reverse(),
+      recentRecords: (patient.medicalHistory || []).slice(-5).reverse(),
+      vaccinationCount: (patient.vaccinations || []).length,
+      familyHistorySize: (patient.familyHistory || []).length,
       healthScore: patient.computeHealthScore(),
     });
   } catch (error) {
