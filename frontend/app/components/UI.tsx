@@ -157,26 +157,69 @@ interface ModalProps {
   title: string;
   children: React.ReactNode;
   width?: string;
+  fullscreen?: boolean;
 }
 
-export const Modal = ({ isOpen, onClose, title, children, width }: ModalProps) => {
+export const Modal = ({ isOpen, onClose, title, children, width, fullscreen }: ModalProps) => {
   if (!isOpen) return null;
+
+  const panelStyle: React.CSSProperties = fullscreen
+    ? {
+        background: 'var(--bg-main)',
+        width: '100vw',
+        height: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        overflow: 'hidden',
+      }
+    : {
+        background: 'white',
+        borderRadius: 'var(--radius-lg)',
+        padding: '28px',
+        maxWidth: width || '500px',
+        width: '90%',
+        boxShadow: 'var(--shadow-lg)',
+        maxHeight: '80vh',
+        overflow: 'auto',
+      };
+
   return (
-    <div style={{
-      position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
-      background: 'rgba(0,0,0,0.5)', display: 'flex',
-      alignItems: 'center', justifyContent: 'center', zIndex: 9998
-    }} onClick={onClose}>
-      <div style={{
-        background: 'white', borderRadius: 'var(--radius-lg)',
-        padding: '28px', maxWidth: width || '500px', width: '90%',
-        boxShadow: 'var(--shadow-lg)', maxHeight: '80vh', overflow: 'auto'
-      }} onClick={e => e.stopPropagation()}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-          <h3 style={{ fontSize: '1.2rem', fontWeight: 600 }}>{title}</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
+    <div
+      style={{
+        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+        background: fullscreen ? 'var(--bg-main)' : 'rgba(0,0,0,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9998,
+      }}
+      onClick={fullscreen ? undefined : onClose}
+    >
+      <div style={panelStyle} onClick={e => e.stopPropagation()}>
+        <div style={{
+          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+          padding: fullscreen ? '20px 32px' : '0 0 20px 0',
+          borderBottom: fullscreen ? '1px solid var(--card-border)' : 'none',
+          background: fullscreen ? 'white' : 'transparent',
+          flexShrink: 0,
+        }}>
+          <h3 style={{ fontSize: fullscreen ? '1.4rem' : '1.2rem', fontWeight: 700 }}>{title}</h3>
+          <button
+            onClick={onClose}
+            style={{
+              background: fullscreen ? 'var(--bg-main)' : 'none',
+              border: fullscreen ? '1px solid var(--card-border)' : 'none',
+              borderRadius: fullscreen ? '8px' : '0',
+              padding: fullscreen ? '6px 14px' : '0',
+              fontSize: fullscreen ? '0.9rem' : '1.5rem',
+              cursor: 'pointer',
+              color: 'var(--text-secondary)',
+              fontWeight: 600,
+            }}
+          >
+            {fullscreen ? 'Close' : '\u00d7'}
+          </button>
         </div>
-        {children}
+        <div style={fullscreen ? { flex: 1, overflow: 'auto', padding: '28px 32px' } : {}}>
+          {children}
+        </div>
       </div>
     </div>
   );
