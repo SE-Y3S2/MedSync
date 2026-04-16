@@ -119,7 +119,17 @@ const toastListeners: Array<(toast: ToastMessage) => void> = [];
 
 export const showToast = (text: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
   const toast: ToastMessage = { id: ++toastId, text, type };
-  toastListeners.forEach(fn => fn(toast));
+  
+  // Hardened loop: prevents potential crashes from invalid background listeners
+  [...toastListeners].forEach(fn => {
+    try {
+      if (typeof fn === 'function') {
+        fn(toast);
+      }
+    } catch (err) {
+      console.error('MedSync Notification Error:', err);
+    }
+  });
 };
 
 export const ToastContainer = () => {
@@ -132,7 +142,12 @@ export const ToastContainer = () => {
         setToasts(prev => prev.filter(t => t.id !== toast.id));
       }, 4000);
     };
-    toastListeners.push(handler);
+    
+    // Defensive push
+    if (typeof handler === 'function') {
+      toastListeners.push(handler);
+    }
+
     return () => {
       const idx = toastListeners.indexOf(handler);
       if (idx > -1) toastListeners.splice(idx, 1);

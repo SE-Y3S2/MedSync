@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useAuth } from '../../context/AuthContext';
 import { appointmentApi, patientApi } from '../../services/api';
 import { Modal, MedInput as Input, MedButton as Button, showToast } from '../../components/UI';
+import PrescriptionEditor from '../../components/PrescriptionEditor';
 import { User, FileText, Pill, Calendar, ShieldBan, Video } from 'lucide-react';
 
 interface Appointment {
@@ -53,15 +54,6 @@ export default function DoctorAppointments() {
   const [record, setRecord] = useState<PatientRecord | null>(null);
   const [recordLoading, setRecordLoading] = useState(false);
 
-  const [prescriptionData, setPrescriptionData] = useState({
-    medication: '',
-    dosage: '',
-    frequency: '',
-    duration: '',
-    instructions: '',
-  });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
   useEffect(() => {
     if (user?.role === 'doctor') loadAppointments();
   }, [user]);
@@ -88,9 +80,18 @@ export default function DoctorAppointments() {
     }
   };
 
-  const handleOpenPrescription = (appt: Appointment) => {
+  const handleOpenPrescription = async (appt: Appointment) => {
     setSelectedAppointment(appt);
     setShowPrescriptionModal(true);
+    // Fetch full record to get allergies if not already loaded
+    if (!record || record.profile.id !== appt.patientId) {
+      try {
+        const data = await patientApi.getPatientFull(appt.patientId);
+        setRecord(data);
+      } catch (err) {
+        console.warn('Could not load patient profile for allergies', err);
+      }
+    }
   };
 
   const handleViewRecords = async (appt: Appointment) => {
@@ -108,31 +109,10 @@ export default function DoctorAppointments() {
     }
   };
 
-  const handleIssuePrescription = async () => {
-    if (!selectedAppointment) return;
-    if (!prescriptionData.medication || !prescriptionData.dosage) {
-      showToast('Medication and dosage are required.', 'warning');
-      return;
-    }
-
-    setIsSubmitting(true);
-    try {
-      await patientApi.doctorIssuePrescription(selectedAppointment.patientId, {
-        ...prescriptionData,
-        prescribedBy: user?.name,
-        date: new Date(),
-      });
-      showToast('Prescription issued successfully!', 'success');
-      setShowPrescriptionModal(false);
-      setPrescriptionData({ medication: '', dosage: '', frequency: '', duration: '', instructions: '' });
-
-      if (selectedAppointment.status === 'confirmed') {
-        await handleStatus(selectedAppointment._id, 'completed', 'Prescription issued');
-      }
-    } catch (err: any) {
-      showToast(err.message || 'Failed to issue prescription', 'error');
-    } finally {
-      setIsSubmitting(false);
+  const onPrescriptionSuccess = () => {
+    // If appointment is confirmed, mark it as completed automatically
+    if (selectedAppointment?.status === 'confirmed') {
+      handleStatus(selectedAppointment._id, 'completed', 'Prescription issued');
     }
   };
 
@@ -232,51 +212,18 @@ export default function DoctorAppointments() {
       <Modal
         isOpen={showPrescriptionModal}
         onClose={() => setShowPrescriptionModal(false)}
-        title={`Issue Prescription for ${selectedAppointment?.patientName || ''}`}
+        title="Issuing Clinical Treatment Plan"
+        width="800px"
       >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-          <Input
-            label="Medication Name"
-            value={prescriptionData.medication}
-            onChange={(e) => setPrescriptionData({ ...prescriptionData, medication: e.target.value })}
-            placeholder="e.g. Paracetamol"
-            required
-          />
-          <div className="grid-2">
-            <Input
-              label="Dosage"
-              value={prescriptionData.dosage}
-              onChange={(e) => setPrescriptionData({ ...prescriptionData, dosage: e.target.value })}
-              placeholder="e.g. 500mg"
-              required
-            />
-            <Input
-              label="Frequency"
-              value={prescriptionData.frequency}
-              onChange={(e) => setPrescriptionData({ ...prescriptionData, frequency: e.target.value })}
-              placeholder="e.g. Twice daily"
-            />
-          </div>
-          <Input
-            label="Duration"
-            value={prescriptionData.duration}
-            onChange={(e) => setPrescriptionData({ ...prescriptionData, duration: e.target.value })}
-            placeholder="e.g. 5 days"
-          />
-          <div className="med-input-group">
-            <label className="med-label">Instructions</label>
-            <textarea
-              className="med-input"
-              value={prescriptionData.instructions}
-              onChange={(e) => setPrescriptionData({ ...prescriptionData, instructions: e.target.value })}
-              placeholder="e.g. After meals"
-              rows={3}
-            />
-          </div>
-          <Button onClick={handleIssuePrescription} disabled={isSubmitting} style={{ width: '100%' }}>
-            {isSubmitting ? 'Issuing...' : 'Issue Prescription & Complete'}
-          </Button>
-        </div>
+        <PrescriptionEditor 
+          appointmentId={selectedAppointment?._id || ''}
+          patientId={selectedAppointment?.patientId || ''}
+          patientName={selectedAppointment?.patientName || ''}
+          patientAllergies={record?.profile?.allergies ? (typeof record.profile.allergies === 'string' ? [record.profile.allergies] : record.profile.allergies) : []}
+          doctorName={user?.name}
+          onSuccess={onPrescriptionSuccess}
+          onCancel={() => setShowPrescriptionModal(false)}
+        />
       </Modal>
 
       {/* Records modal */}
