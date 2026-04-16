@@ -48,7 +48,22 @@ async function analyseWithGroq(transcript: string) {
   const data = await res.json();
   if (data.error) throw new Error(data.error.message);
   const raw = data.choices?.[0]?.message?.content || "{}";
-  return JSON.parse(raw.replace(/```json|```/g, "").trim());
+  try {
+    const cleaned = raw.replace(/```json|```/g, "").trim();
+    return JSON.parse(cleaned);
+  } catch (e) {
+    console.error("Failed to parse Groq response:", raw);
+    return {
+      doctor_said: "",
+      patient_said: "",
+      symptoms: [],
+      possible_conditions: [],
+      red_flags: [],
+      suggested_questions: [],
+      recommended_tests: [],
+      summary: "Error parsing AI response"
+    };
+  }
 }
 
 // ── small UI helpers ──────────────────────────────────────────

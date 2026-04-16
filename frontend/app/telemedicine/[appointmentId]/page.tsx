@@ -254,12 +254,17 @@ export default function TelemedicineSession() {
     if (!jitsiApi) return;
     try {
       const participants = jitsiApi.getParticipantsInfo();
-      participants.forEach((p: any) => {
-        jitsiApi.executeCommand('sendEndpointTextMessage', p.participantId, {
-          name: 'transcript-relay',
-          text: text,
-          senderName: user?.role === 'doctor' ? `Dr. ${user.name}` : user?.name
-        });
+      // Jitsi might return an array or an object map depending on version
+      const participantList = Array.isArray(participants) ? participants : Object.values(participants || {});
+      
+      participantList.forEach((p: any) => {
+        if (p && p.participantId) {
+          jitsiApi.executeCommand('sendEndpointTextMessage', p.participantId, {
+            name: 'transcript-relay',
+            text: text,
+            senderName: user?.role === 'doctor' ? `Dr. ${user.name}` : user?.name
+          });
+        }
       });
     } catch (e) {
       console.error('Failed to broadcast transcript', e);
@@ -277,9 +282,13 @@ export default function TelemedicineSession() {
       if (m.id === id) {
         const updated = { ...m, [field]: value };
         // Allergy Check
-        if (field === 'medication' && patientProfile?.allergies) {
-           const match = patientProfile.allergies.find((a: string) => value.toLowerCase().includes(a.toLowerCase()));
-           updated.warning = match ? `Warning: Patient is allergic to ${match}` : undefined;
+        if (field === 'medication' && patientProfile?.allergies && Array.isArray(patientProfile.allergies)) {
+           const match = patientProfile.allergies.find((a: any) => {
+             const substance = typeof a === 'string' ? a : a.substance;
+             return substance && value.toLowerCase().includes(substance.toLowerCase());
+           });
+           const substanceName = match ? (typeof match === 'string' ? match : match.substance) : null;
+           updated.warning = substanceName ? `Warning: Patient is allergic to ${substanceName}` : undefined;
         }
         return updated;
       }
@@ -307,7 +316,13 @@ export default function TelemedicineSession() {
 
     setIsIssuing(true);
     try {
-      const signatureBase64 = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+      const canvas = sigCanvas.current?.getTrimmedCanvas();
+      if (!canvas) {
+        showToast('Signature canvas capture failed', 'error');
+        setIsIssuing(false);
+        return;
+      }
+      const signatureBase64 = canvas.toDataURL('image/png');
       const result = await doctorApi.issuePrescription({
         patientId: appointment?.patientId,
         patientName: appointment?.patientName,
