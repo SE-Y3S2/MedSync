@@ -6,20 +6,21 @@ import Link from 'next/link';
 
 export default function PaymentSuccessPage() {
     return (
-        <div className="animate-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh' }}>
-            <Card title="Payment Successful" icon="✅" style={{ maxWidth: '500px', textAlign: 'center' }}>
-                <div style={{ fontSize: '3rem', margin: '20px 0', color: 'var(--success)' }}>
-                    💳
+        <div className="animate-in" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '70vh', padding: '24px' }}>
+            <Card title="Payment confirmed" icon="✓" style={{ maxWidth: '560px', width: '100%', textAlign: 'center', background: 'white' }}>
+                <div style={{ width: '88px', height: '88px', borderRadius: '28px', margin: '0 auto 20px', display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg, rgba(16,185,129,0.14), rgba(34,197,94,0.2))', color: 'var(--success)', fontSize: '2.1rem', fontWeight: 800 }}>
+                    ✓
                 </div>
-                <p style={{ color: 'var(--text-secondary)', marginBottom: '24px' }}>
-                    Thank you! Your payment has been processed successfully. Your appointment is now confirmed and recorded in our system.
+                <h2 style={{ marginBottom: '10px', fontSize: '1.45rem', fontWeight: 800 }}>Payment received successfully</h2>
+                <p style={{ color: 'var(--text-secondary)', marginBottom: '24px', lineHeight: 1.7 }}>
+                    Your consultation has been paid for and the appointment record has been updated. You can now review the booking details or return to your dashboard.
                 </p>
-                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', gap: '12px', justifyContent: 'center', flexWrap: 'wrap' }}>
                     <Link href="/appointment">
-                        <Button className="navy">View Appointments</Button>
+                        <Button className="navy">Open appointments</Button>
                     </Link>
                     <Link href="/">
-                        <Button variant="secondary">Back to Dashboard</Button>
+                        <Button variant="secondary">Back to dashboard</Button>
                     </Link>
                 </div>
             </Card>

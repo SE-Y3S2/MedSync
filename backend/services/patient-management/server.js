@@ -10,6 +10,7 @@ const { connectPrescriptionConsumer } = require('./src/prescriptionConsumer');
 const port = process.env.PORT || 3001;
 
 const mongoOpts = {
+  dbName: 'medsync',
   serverSelectionTimeoutMS: 20000,
   connectTimeoutMS: 20000,
   socketTimeoutMS: 45000,
@@ -21,9 +22,12 @@ const start = async () => {
   if (!uri) throw new Error('MONGO_URI is not set');
   await mongoose.connect(uri, mongoOpts);
   console.log('[patient-management] MongoDB connected');
-  await connectProducer();
-  await connectPrescriptionConsumer();
-  app.listen(port, () => console.log(`[patient-management] listening on ${port}`));
+  app.listen(port, () => {
+    console.log(`[patient-management] listening on ${port}`);
+    // Start Kafka in the background so it doesn't block login requests
+    connectProducer().catch(err => console.error('Kafka Producer Error:', err));
+    connectPrescriptionConsumer().catch(err => console.error('Kafka Consumer Error:', err));
+  });
 };
 
 start().catch((err) => {

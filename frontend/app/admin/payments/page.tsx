@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useAuth } from '../../context/AuthContext';
 import { paymentApi } from '../../services/api';
-import { ShieldBan, CreditCard, DollarSign, TrendingUp, RefreshCcw, Search, ExternalLink, Filter } from 'lucide-react';
+import { ShieldBan, CreditCard, DollarSign, TrendingUp, RefreshCcw, Search, ExternalLink, Filter, ArrowRight } from 'lucide-react';
 import { Badge, Skeleton, showToast } from '../../components/UI';
 
 export default function AdminPaymentsPage() {
@@ -59,15 +59,25 @@ export default function AdminPaymentsPage() {
     const successRate = payments.length > 0 ? (payments.filter(p => p.status === 'paid').length / payments.length) * 100 : 0;
 
     return (
-        <div className="animate-in">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-                <div>
-                    <h1 className="page-title">Financial Overlook</h1>
-                    <p className="page-subtitle">Platform-wide revenue tracking and transaction reconciliation.</p>
+        <div className="animate-in" style={{ display: 'grid', gap: '22px' }}>
+            <section style={{ background: 'linear-gradient(135deg, #0f172a 0%, #1d4ed8 100%)', color: 'white', borderRadius: '24px', padding: '28px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px', flexWrap: 'wrap' }}>
+                    <div>
+                        <div style={{ fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.12em', opacity: 0.72, marginBottom: '8px' }}>Admin finance</div>
+                        <h1 style={{ fontSize: '2rem', fontWeight: 800, marginBottom: '8px' }}>Financial overlook</h1>
+                        <p style={{ color: 'rgba(255,255,255,0.82)', lineHeight: 1.7, maxWidth: '760px', margin: 0 }}>Track payments, review reconciliation, and inspect consultation transactions with a clean operational view.</p>
+                    </div>
+                    <button className="med-button secondary" onClick={loadPayments}>
+                        <RefreshCcw size={16} /> Refresh
+                    </button>
                 </div>
-                <button className="med-button secondary" onClick={loadPayments}>
-                    <RefreshCcw size={16} /> Refresh Financials
-                </button>
+            </section>
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px', flexWrap: 'wrap' }}>
+                <div>
+                    <h2 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: '4px' }}>Transaction board</h2>
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>Search by transaction, appointment, or doctor name.</p>
+                </div>
             </div>
 
             <div className="stats-bar" style={{ marginBottom: '32px' }}>
@@ -75,7 +85,7 @@ export default function AdminPaymentsPage() {
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                             <div className="stat-value" style={{ color: 'var(--turquoise)' }}>{totalRevenue.toLocaleString()}</div>
-                            <div className="stat-label">Total Revenue (INR)</div>
+                            <div className="stat-label">Total Revenue (LKR)</div>
                         </div>
                         <div className="avatar sm" style={{ background: 'var(--success-light)', color: 'var(--success)', width: '32px', height: '32px' }}>
                             <TrendingUp size={16} />
@@ -183,8 +193,8 @@ export default function AdminPaymentsPage() {
                                         />
                                     </td>
                                     <td style={{ padding: '16px', textAlign: 'right' }}>
-                                        <button className="med-button sm secondary" onClick={() => showToast(`Stripe Session: ${p.stripeSessionId}`, 'info')}>
-                                            <ExternalLink size={14} /> Stripe Event
+                                        <button className="med-button sm secondary" onClick={() => showToast(`Stripe Session: ${p.stripeSessionId || 'N/A'}`, 'info')}>
+                                            <ExternalLink size={14} /> Details
                                         </button>
                                     </td>
                                 </tr>
