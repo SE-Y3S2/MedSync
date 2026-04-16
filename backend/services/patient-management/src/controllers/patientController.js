@@ -4,6 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const Patient = require('../models/Patient');
 const Prescription = require('../models/Prescription'); // Added for historical recovery
+const crypto = require('crypto');
 const { sendEvent } = require('../utils/kafka');
 const { JWT_SECRET } = require('../middleware/authMiddleware');
 const { recordAccess } = require('../utils/audit');
@@ -183,7 +184,7 @@ exports.getPatientForProvider = async (req, res) => {
       vaccinations: patient.vaccinations,
       familyHistory: patient.familyHistory,
       medicalHistory: patient.medicalHistory,
-      prescriptions: patient.prescriptions,
+      prescriptions: await Prescription.find({ patientId: patient._id }),
       documents: patient.documents,
       healthScore: patient.computeHealthScore(),
     });
@@ -212,7 +213,7 @@ exports.getPatientRecords = async (req, res) => {
     audit(req, patient._id, 'READ_RECORDS', 'medicalHistory+prescriptions');
     res.status(200).json({
       medicalHistory: patient.medicalHistory,
-      prescriptions: patient.prescriptions,
+      prescriptions: await Prescription.find({ patientId: req.params.patientId }),
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -497,70 +498,12 @@ exports.getRecords = async (req, res) => {
     const patient = await Patient.findById(patientId);
     if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-    // --- HISTORICAL DATA RECOVERY ---
-    // If the patient is missing prescriptions that exist in the global prescriptions collection,
-    // we pull them in now. This fixes the sync gap caused by previous service crashes.
-    try {
-      const globalPrescriptions = await Prescription.find({ patientId });
-      
-      let hasNewData = false;
-      for (const gp of globalPrescriptions) {
-        // 1. Find if this prescription already exists locally
-        const existingLocalIndex = patient.prescriptions.findIndex(p => 
-          p.verificationId === gp.verificationId || 
-          (p.medication === gp.medications.map(m => m.medication).join(', ') && 
-           Math.abs(new Date(p.date) - new Date(gp.issuedAt)) < 60000)
-        );
-
-        if (existingLocalIndex !== -1) {
-          // REPAIR: If it exists but lacks a verificationId, attach it now
-          if (!patient.prescriptions[existingLocalIndex].verificationId) {
-            console.log(`[Recovery] Repairing missing verificationId for prescription ${gp._id}`);
-            patient.prescriptions[existingLocalIndex].verificationId = gp.verificationId || gp._id;
-            hasNewData = true;
-          }
-        } else {
-          // ADD NEW: Prescription doesn't exist locally at all
-          console.log(`[Recovery] Pushing missing prescription ${gp.verificationId || gp._id} to patient ${patientId}`);
-          patient.prescriptions.push({
-            date: gp.issuedAt || new Date(),
-            medication: gp.medications.map(m => m.medication).join(', '),
-            dosage: gp.medications.map(m => `${m.medication}: ${m.dosage}`).join(' | '),
-            frequency: gp.medications.map(m => m.frequency).join(', '),
-            duration: gp.medications.map(m => m.duration).join(', '),
-            instructions: gp.instructions,
-            prescribedBy: gp.doctorName ? `Dr. ${gp.doctorName}` : 'Doctor',
-            verificationId: gp.verificationId || gp._id
-          });
-          
-          // Also add to documents for consistency if not there
-          const docExists = patient.documents.some(d => d.verificationId === (gp.verificationId || gp._id));
-          if (!docExists) {
-            patient.documents.push({
-              fileName: `Prescription_${gp.verificationId || gp._id.toString()}.pdf`,
-              fileUrl: `/verify/${gp.verificationId || gp._id.toString()}`,
-              verificationId: gp.verificationId || gp._id.toString(),
-              uploadDate: new Date(),
-              type: 'Prescription'
-            });
-          }
-          hasNewData = true;
-        }
-      }
-
-      if (hasNewData) {
-        await patient.save();
-        console.log(`[Recovery] Successfully recovered historical data for patient ${patientId}`);
-      }
-    } catch (recoveryErr) {
-      console.error('[Recovery] Error during historical sync:', recoveryErr.message);
-      // Continue returning existing records even if recovery fails
-    }
-    // ---------------------------------
+    // Directly fetch from the shared global collection
+    const prescriptions = await Prescription.find({ patientId });
 
     res.status(200).json({
       medicalHistory: patient.medicalHistory,
-      prescriptions: patient.prescriptions,
+      prescriptions: prescriptions,
     });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -614,18 +557,30 @@ exports.deleteMedicalRecord = async (req, res) => {
 
 exports.addPrescription = async (req, res) => {
   try {
-    const { medication, dosage, frequency, duration, instructions, prescribedBy, date, refillsRemaining } = req.body;
+    const { medication, dosage, frequency, duration, instructions, prescribedBy, date } = req.body;
     if (!medication || !dosage) return res.status(400).json({ message: 'Medication and dosage are required.' });
 
     const patient = await Patient.findById(req.user.patientId);
     if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-    const prescription = { medication, dosage, frequency, duration, instructions, prescribedBy, refillsRemaining };
-    if (date) prescription.date = date;
-    patient.prescriptions.push(prescription);
-    await patient.save();
+    const verificationId = crypto.randomBytes(6).toString('hex').toUpperCase();
+
+    const newPrescription = new Prescription({
+      patientId: patient._id.toString(),
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      doctorId: 'self-recorded',
+      doctorName: prescribedBy || 'Self',
+      appointmentId: 'manual',
+      medications: [{ medication, dosage, frequency, duration }],
+      instructions,
+      verificationId,
+      signatureBase64: 'manual_issuance_sig',
+      issuedAt: date || new Date()
+    });
+
+    await newPrescription.save();
     audit(req, patient._id, 'ADD_PRESCRIPTION', medication);
-    res.status(201).json(patient.prescriptions[patient.prescriptions.length - 1]);
+    res.status(201).json(newPrescription);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -633,12 +588,8 @@ exports.addPrescription = async (req, res) => {
 
 exports.updatePrescription = async (req, res) => {
   try {
-    const patient = await Patient.findById(req.user.patientId);
-    if (!patient) return res.status(404).json({ message: 'Patient not found' });
-    const p = patient.prescriptions.id(req.params.id);
+    const p = await Prescription.findByIdAndUpdate(req.params.id, req.body, { new: true });
     if (!p) return res.status(404).json({ message: 'Prescription not found' });
-    Object.assign(p, req.body);
-    await patient.save();
     res.json(p);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -647,11 +598,9 @@ exports.updatePrescription = async (req, res) => {
 
 exports.deletePrescription = async (req, res) => {
   try {
-    const patient = await Patient.findById(req.user.patientId);
-    if (!patient) return res.status(404).json({ message: 'Patient not found' });
-    patient.prescriptions.pull(req.params.id);
-    await patient.save();
-    audit(req, patient._id, 'DELETE_PRESCRIPTION', req.params.id);
+    const p = await Prescription.findByIdAndDelete(req.params.id);
+    if (!p) return res.status(404).json({ message: 'Prescription not found' });
+    audit(req, req.user.patientId, 'DELETE_PRESCRIPTION', req.params.id);
     res.json({ message: 'Removed' });
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -661,7 +610,7 @@ exports.deletePrescription = async (req, res) => {
 exports.doctorIssuePrescription = async (req, res) => {
   try {
     const { patientId } = req.params;
-    const { medication, dosage, frequency, duration, instructions, prescribedBy, date, refillsRemaining } = req.body;
+    const { medication, dosage, frequency, duration, instructions, prescribedBy, date } = req.body;
 
     if (!req.user.doctorId && req.user.role !== 'admin' && req.user.role !== 'doctor') {
       return res.status(403).json({ message: 'Forbidden. Only doctors can issue prescriptions.' });
@@ -671,11 +620,22 @@ exports.doctorIssuePrescription = async (req, res) => {
     const patient = await Patient.findById(patientId);
     if (!patient) return res.status(404).json({ message: 'Patient not found' });
 
-    const prescription = { medication, dosage, frequency, duration, instructions, prescribedBy, refillsRemaining };
-    if (date) prescription.date = date;
+    const verificationId = crypto.randomBytes(6).toString('hex').toUpperCase();
 
-    patient.prescriptions.push(prescription);
-    await patient.save();
+    const prescription = new Prescription({
+      patientId,
+      patientName: `${patient.firstName} ${patient.lastName}`,
+      doctorId: req.user.doctorId || req.user.id,
+      doctorName: prescribedBy || 'Doctor',
+      appointmentId: 'manual', 
+      medications: [{ medication, dosage, frequency, duration }],
+      instructions,
+      verificationId,
+      signatureBase64: 'manual_issuance_sig',
+      issuedAt: date || new Date()
+    });
+
+    await prescription.save();
     audit(req, patient._id, 'DOCTOR_ISSUED_PRESCRIPTION', medication);
 
     await sendEvent('patient-events', {
@@ -683,10 +643,11 @@ exports.doctorIssuePrescription = async (req, res) => {
       patientId: patient._id,
       prescribedBy,
       medication,
+      verificationId,
       timestamp: new Date(),
     });
 
-    res.status(201).json(patient.prescriptions[patient.prescriptions.length - 1]);
+    res.status(201).json(prescription);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -795,11 +756,13 @@ exports.getMedicalSummary = async (req, res) => {
 
     audit(req, patient._id, 'READ_SUMMARY');
 
+    const prescriptions = await Prescription.find({ patientId: targetId });
+
     res.status(200).json({
       patient: { id: patient._id, name: `${patient.firstName} ${patient.lastName}`, dateOfBirth: patient.dateOfBirth, gender: patient.gender, bloodType: patient.bloodType },
       criticalAllergies: patient.allergies.filter((a) => ['severe', 'life-threatening'].includes(a.severity)),
       activeChronicConditions: patient.chronicConditions.filter((c) => c.status === 'active'),
-      activePrescriptions: patient.prescriptions.filter((p) => p.active !== false),
+      activePrescriptions: prescriptions.filter((p) => p.status !== 'cancelled'),
       lastVitals: patient.vitalSigns.slice(-3).reverse(),
       recentRecords: patient.medicalHistory.slice(-5).reverse(),
       vaccinationCount: patient.vaccinations.length,

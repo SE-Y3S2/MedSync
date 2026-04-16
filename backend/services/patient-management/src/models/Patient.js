@@ -104,21 +104,6 @@ const medicalRecordSchema = new mongoose.Schema(
   { _id: true, timestamps: true }
 );
 
-const prescriptionSchema = new mongoose.Schema(
-  {
-    date: { type: Date, default: Date.now },
-    medication: { type: String, required: true },
-    dosage: { type: String, required: true },
-    frequency: { type: String },
-    duration: { type: String },
-    instructions: { type: String },
-    prescribedBy: { type: String },
-    refillsRemaining: { type: Number, default: 0, min: 0 },
-    verificationId: { type: String },
-    active: { type: Boolean, default: true },
-  },
-  { _id: true, timestamps: true }
-);
 
 const documentSchema = new mongoose.Schema(
   {
@@ -195,7 +180,6 @@ const patientSchema = new mongoose.Schema(
     familyHistory: { type: [familyHistorySchema], default: [] },
 
     medicalHistory: { type: [medicalRecordSchema], default: [] },
-    prescriptions: { type: [prescriptionSchema], default: [] },
     documents: { type: [documentSchema], default: [] },
 
     auditLog: { type: [auditEntrySchema], default: [], select: false },
