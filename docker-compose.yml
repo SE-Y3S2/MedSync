@@ -65,6 +65,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/auth_db
       - PORT=5000
     dns:
       - 8.8.8.8
@@ -92,6 +93,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/patient_db
       - PORT=3001
     dns:
       - 8.8.8.8
@@ -108,6 +110,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/doctor_db
       - PORT=3002
     dns:
       - 8.8.8.8
@@ -124,6 +127,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/appointment_db
       - DOCTOR_SERVICE_URL=http://doctor-management:3002
       - PORT=3003
     dns:
@@ -143,6 +147,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/telemedicine_db
       - PORT=3004
 
   payment:
@@ -156,6 +161,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/payment_db
       - PORT=3005
     dns:
       - 8.8.8.8
@@ -172,14 +178,13 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/symptom_db
       - PORT=3007
     dns:
       - 8.8.8.8
       - 8.8.4.4
 
   frontend:
-    # Build-time args bake NEXT_PUBLIC_* into the Next.js bundle so the browser
-    # actually sees these values (runtime env_file alone would not).
     build:
       context: ./frontend
       args:

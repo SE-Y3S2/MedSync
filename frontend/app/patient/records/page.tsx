@@ -12,7 +12,7 @@ const PATIENT_SERVICE_ORIGIN = (() => {
     return 'http://localhost:3001';
   }
 })();
-import { Card, Button, Tabs, Badge, showToast, Modal } from '../../components/UI';
+import { Card, Button, MedButton, Tabs, Badge, showToast, Modal } from '../../components/UI';
 
 export default function RecordsPage() {
   const [activeTab, setActiveTab] = useState(0);
@@ -24,7 +24,14 @@ export default function RecordsPage() {
   const [dragOver, setDragOver] = useState(false);
   const [showAddRecord, setShowAddRecord] = useState(false);
   const [showAddPrescription, setShowAddPrescription] = useState(false);
-  const [newRecord, setNewRecord] = useState({ description: '', diagnosis: '', doctor: '', notes: '' });
+  const [recordCategory, setRecordCategory] = useState<'medical' | 'surgical' | 'family'>('medical');
+  const [newRecord, setNewRecord] = useState({
+    description: '', diagnosis: '', doctor: '', notes: '', date: '',
+    // surgical
+    procedure: '', surgeon: '', hospital: '', outcome: '', complications: '',
+    // family
+    relation: '', condition: '', ageOfOnset: '', deceased: false,
+  });
   const [newPrescription, setNewPrescription] = useState({ medication: '', dosage: '', frequency: '', duration: '', instructions: '', prescribedBy: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -76,17 +83,53 @@ export default function RecordsPage() {
     }
   };
 
-  // Add medical record
+  const resetRecordForm = () => {
+    setNewRecord({
+      description: '', diagnosis: '', doctor: '', notes: '', date: '',
+      procedure: '', surgeon: '', hospital: '', outcome: '', complications: '',
+      relation: '', condition: '', ageOfOnset: '', deceased: false,
+    });
+    setRecordCategory('medical');
+  };
+
   const handleAddRecord = async () => {
-    if (!newRecord.description) return showToast('Description is required.', 'warning');
     try {
-      await patientApi.addMedicalRecord(newRecord);
-      setNewRecord({ description: '', diagnosis: '', doctor: '', notes: '' });
+      if (recordCategory === 'family') {
+        if (!newRecord.relation || !newRecord.condition) {
+          return showToast('Relation and condition are required.', 'warning');
+        }
+        await patientApi.addFamilyHistory({
+          relation: newRecord.relation,
+          condition: newRecord.condition,
+          ageOfOnset: newRecord.ageOfOnset ? Number(newRecord.ageOfOnset) : undefined,
+          notes: [newRecord.deceased ? 'Deceased' : '', newRecord.notes].filter(Boolean).join('. '),
+        });
+        showToast('Family history recorded!', 'success');
+      } else {
+        const desc = recordCategory === 'surgical'
+          ? `[Surgical] ${newRecord.procedure || newRecord.description}`
+          : newRecord.description;
+        if (!desc) return showToast('Description is required.', 'warning');
+
+        await patientApi.addMedicalRecord({
+          description: desc,
+          diagnosis: recordCategory === 'surgical' ? newRecord.outcome : newRecord.diagnosis,
+          doctor: recordCategory === 'surgical' ? newRecord.surgeon : newRecord.doctor,
+          notes: [
+            recordCategory === 'surgical' && newRecord.hospital ? `Hospital: ${newRecord.hospital}` : '',
+            recordCategory === 'surgical' && newRecord.complications ? `Complications: ${newRecord.complications}` : '',
+            newRecord.notes,
+          ].filter(Boolean).join('\n'),
+          date: newRecord.date || undefined,
+        });
+        showToast(recordCategory === 'surgical' ? 'Surgical history recorded!' : 'Medical record added!', 'success');
+      }
+
+      resetRecordForm();
       setShowAddRecord(false);
       fetchData();
-      showToast('Medical record added!', 'success');
     } catch (error) {
-      showToast('Error adding record.', 'error');
+      showToast('Error saving record.', 'error');
     }
   };
 
@@ -329,58 +372,299 @@ export default function RecordsPage() {
         )}
       </div>
 
-      {/* ── Add Medical Record Modal ── */}
-      <Modal isOpen={showAddRecord} onClose={() => setShowAddRecord(false)} title="Add Medical Record">
-        <div className="med-input-group">
-          <label className="med-label">Description *</label>
-          <input className="med-input" value={newRecord.description} onChange={(e) => setNewRecord({ ...newRecord, description: e.target.value })} placeholder="e.g., Annual checkup" />
+      {/* ── Add Medical Record — Full-screen Modal ── */}
+      <Modal
+        isOpen={showAddRecord}
+        onClose={() => { setShowAddRecord(false); resetRecordForm(); }}
+        title="Record Health History"
+        fullscreen
+      >
+        <div style={{ maxWidth: '860px', margin: '0 auto' }}>
+          {/* Category selector */}
+          <div style={{
+            display: 'flex', gap: '8px', marginBottom: '32px',
+            background: 'var(--primary-light)', padding: '6px', borderRadius: 'var(--radius-lg)',
+          }}>
+            {([
+              { key: 'medical', label: 'Past Medical', icon: '🩺' },
+              { key: 'surgical', label: 'Surgical History', icon: '🔬' },
+              { key: 'family', label: 'Family History', icon: '👨‍👩‍👧‍👦' },
+            ] as const).map(cat => (
+              <button
+                key={cat.key}
+                type="button"
+                onClick={() => setRecordCategory(cat.key)}
+                style={{
+                  flex: 1, padding: '14px 16px', borderRadius: 'calc(var(--radius-lg) - 2px)',
+                  border: 'none', cursor: 'pointer', fontWeight: 600, fontSize: '0.95rem',
+                  transition: 'all 0.2s ease',
+                  background: recordCategory === cat.key ? 'var(--primary)' : 'transparent',
+                  color: recordCategory === cat.key ? 'white' : 'var(--primary)',
+                  boxShadow: recordCategory === cat.key ? 'var(--shadow-md)' : 'none',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
+                }}
+              >
+                <span>{cat.icon}</span> {cat.label}
+              </button>
+            ))}
+          </div>
+
+          {/* ── Past Medical fields ── */}
+          {recordCategory === 'medical' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ padding: '16px 20px', background: 'white', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+                <h4 style={{ margin: '0 0 4px', fontSize: '1.05rem' }}>Past Medical History</h4>
+                <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+                  Record a previous illness, chronic condition diagnosis, hospitalisation, or clinical visit.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="med-input-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+                  <label className="med-label">Description <span style={{ color: 'var(--error)' }}>*</span></label>
+                  <input className="med-input" value={newRecord.description}
+                    onChange={(e) => setNewRecord({ ...newRecord, description: e.target.value })}
+                    placeholder="e.g., Diagnosed with Type 2 Diabetes" />
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0 }}>
+                  <label className="med-label">Diagnosis</label>
+                  <input className="med-input" value={newRecord.diagnosis}
+                    onChange={(e) => setNewRecord({ ...newRecord, diagnosis: e.target.value })}
+                    placeholder="e.g., E11 — Type 2 Diabetes Mellitus" />
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0 }}>
+                  <label className="med-label">Treating Doctor</label>
+                  <input className="med-input" value={newRecord.doctor}
+                    onChange={(e) => setNewRecord({ ...newRecord, doctor: e.target.value })}
+                    placeholder="e.g., Dr. Perera" />
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0 }}>
+                  <label className="med-label">Date</label>
+                  <input type="date" className="med-input" value={newRecord.date}
+                    onChange={(e) => setNewRecord({ ...newRecord, date: e.target.value })} />
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+                  <label className="med-label">Clinical Notes</label>
+                  <textarea className="med-input" rows={4} value={newRecord.notes}
+                    onChange={(e) => setNewRecord({ ...newRecord, notes: e.target.value })}
+                    placeholder="Treatment plan, follow-up schedule, observations..."
+                    style={{ resize: 'vertical' }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Surgical History fields ── */}
+          {recordCategory === 'surgical' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ padding: '16px 20px', background: 'white', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+                <h4 style={{ margin: '0 0 4px', fontSize: '1.05rem' }}>Surgical History</h4>
+                <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+                  Record a past surgery, invasive procedure, or operative intervention.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="med-input-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+                  <label className="med-label">Procedure Name <span style={{ color: 'var(--error)' }}>*</span></label>
+                  <input className="med-input" value={newRecord.procedure}
+                    onChange={(e) => setNewRecord({ ...newRecord, procedure: e.target.value })}
+                    placeholder="e.g., Laparoscopic Appendectomy" />
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0 }}>
+                  <label className="med-label">Surgeon</label>
+                  <input className="med-input" value={newRecord.surgeon}
+                    onChange={(e) => setNewRecord({ ...newRecord, surgeon: e.target.value })}
+                    placeholder="e.g., Dr. Fernando" />
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0 }}>
+                  <label className="med-label">Hospital / Facility</label>
+                  <input className="med-input" value={newRecord.hospital}
+                    onChange={(e) => setNewRecord({ ...newRecord, hospital: e.target.value })}
+                    placeholder="e.g., National Hospital Colombo" />
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0 }}>
+                  <label className="med-label">Date of Surgery</label>
+                  <input type="date" className="med-input" value={newRecord.date}
+                    onChange={(e) => setNewRecord({ ...newRecord, date: e.target.value })} />
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0 }}>
+                  <label className="med-label">Outcome</label>
+                  <select className="med-input" value={newRecord.outcome}
+                    onChange={(e) => setNewRecord({ ...newRecord, outcome: e.target.value })}>
+                    <option value="">Select outcome</option>
+                    <option value="Successful">Successful</option>
+                    <option value="Successful with complications">Successful with complications</option>
+                    <option value="Partially successful">Partially successful</option>
+                    <option value="Ongoing recovery">Ongoing recovery</option>
+                  </select>
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+                  <label className="med-label">Complications (if any)</label>
+                  <input className="med-input" value={newRecord.complications}
+                    onChange={(e) => setNewRecord({ ...newRecord, complications: e.target.value })}
+                    placeholder="e.g., Post-op infection managed with antibiotics" />
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+                  <label className="med-label">Additional Notes</label>
+                  <textarea className="med-input" rows={3} value={newRecord.notes}
+                    onChange={(e) => setNewRecord({ ...newRecord, notes: e.target.value })}
+                    placeholder="Recovery timeline, post-operative instructions..."
+                    style={{ resize: 'vertical' }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Family History fields ── */}
+          {recordCategory === 'family' && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+              <div style={{ padding: '16px 20px', background: 'white', borderRadius: 'var(--radius-md)', border: '1px solid var(--card-border)' }}>
+                <h4 style={{ margin: '0 0 4px', fontSize: '1.05rem' }}>Family Medical History</h4>
+                <p style={{ margin: 0, fontSize: '0.88rem', color: 'var(--text-secondary)' }}>
+                  Record hereditary conditions or diseases that run in your family. This helps doctors assess genetic risk factors.
+                </p>
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+                <div className="med-input-group" style={{ marginBottom: 0 }}>
+                  <label className="med-label">Family Member <span style={{ color: 'var(--error)' }}>*</span></label>
+                  <select className="med-input" value={newRecord.relation}
+                    onChange={(e) => setNewRecord({ ...newRecord, relation: e.target.value })}>
+                    <option value="">Select relation</option>
+                    <option value="mother">Mother</option>
+                    <option value="father">Father</option>
+                    <option value="sibling">Sibling</option>
+                    <option value="grandparent">Grandparent</option>
+                    <option value="aunt">Aunt</option>
+                    <option value="uncle">Uncle</option>
+                    <option value="cousin">Cousin</option>
+                    <option value="child">Child</option>
+                    <option value="other">Other</option>
+                  </select>
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0 }}>
+                  <label className="med-label">Condition <span style={{ color: 'var(--error)' }}>*</span></label>
+                  <input className="med-input" value={newRecord.condition}
+                    onChange={(e) => setNewRecord({ ...newRecord, condition: e.target.value })}
+                    placeholder="e.g., Coronary artery disease" />
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0 }}>
+                  <label className="med-label">Age of Onset</label>
+                  <input type="number" className="med-input" value={newRecord.ageOfOnset}
+                    onChange={(e) => setNewRecord({ ...newRecord, ageOfOnset: e.target.value })}
+                    placeholder="e.g., 52" min="0" max="120" />
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0 }}>
+                  <label className="med-label">Status</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginTop: '8px' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer', fontSize: '0.9rem' }}>
+                      <input type="checkbox" checked={newRecord.deceased}
+                        onChange={(e) => setNewRecord({ ...newRecord, deceased: e.target.checked })} />
+                      Deceased from this condition
+                    </label>
+                  </div>
+                </div>
+                <div className="med-input-group" style={{ marginBottom: 0, gridColumn: '1 / -1' }}>
+                  <label className="med-label">Additional Notes</label>
+                  <textarea className="med-input" rows={3} value={newRecord.notes}
+                    onChange={(e) => setNewRecord({ ...newRecord, notes: e.target.value })}
+                    placeholder="e.g., Father had bypass surgery at age 58, managed with statins..."
+                    style={{ resize: 'vertical' }} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          <MedButton
+            onClick={handleAddRecord}
+            style={{ width: '100%', marginTop: '28px', padding: '14px', fontSize: '1.05rem' }}
+          >
+            {recordCategory === 'medical' && 'Save Medical Record'}
+            {recordCategory === 'surgical' && 'Save Surgical Record'}
+            {recordCategory === 'family' && 'Save Family History'}
+          </MedButton>
         </div>
-        <div className="med-input-group">
-          <label className="med-label">Diagnosis</label>
-          <input className="med-input" value={newRecord.diagnosis} onChange={(e) => setNewRecord({ ...newRecord, diagnosis: e.target.value })} placeholder="e.g., Mild hypertension" />
-        </div>
-        <div className="med-input-group">
-          <label className="med-label">Doctor</label>
-          <input className="med-input" value={newRecord.doctor} onChange={(e) => setNewRecord({ ...newRecord, doctor: e.target.value })} placeholder="Doctor name" />
-        </div>
-        <div className="med-input-group">
-          <label className="med-label">Notes</label>
-          <textarea className="med-input" value={newRecord.notes} onChange={(e) => setNewRecord({ ...newRecord, notes: e.target.value })} placeholder="Additional notes" rows={3} />
-        </div>
-        <Button onClick={handleAddRecord} icon="💾">Save Record</Button>
       </Modal>
 
       {/* ── Add Prescription Modal ── */}
       <Modal isOpen={showAddPrescription} onClose={() => setShowAddPrescription(false)} title="Add Prescription">
-        <div className="grid-2">
-          <div className="med-input-group">
-            <label className="med-label">Medication *</label>
-            <input className="med-input" value={newPrescription.medication} onChange={(e) => setNewPrescription({ ...newPrescription, medication: e.target.value })} placeholder="Drug name" />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', margin: 0, lineHeight: 1.5 }}>
+            Add a medication entry to your prescription history for tracking.
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="med-input-group" style={{ marginBottom: 0 }}>
+              <label className="med-label">Medication <span style={{ color: 'var(--error)' }}>*</span></label>
+              <input
+                className="med-input"
+                value={newPrescription.medication}
+                onChange={(e) => setNewPrescription({ ...newPrescription, medication: e.target.value })}
+                placeholder="e.g., Paracetamol"
+              />
+            </div>
+            <div className="med-input-group" style={{ marginBottom: 0 }}>
+              <label className="med-label">Dosage <span style={{ color: 'var(--error)' }}>*</span></label>
+              <input
+                className="med-input"
+                value={newPrescription.dosage}
+                onChange={(e) => setNewPrescription({ ...newPrescription, dosage: e.target.value })}
+                placeholder="e.g., 500mg"
+              />
+            </div>
           </div>
-          <div className="med-input-group">
-            <label className="med-label">Dosage *</label>
-            <input className="med-input" value={newPrescription.dosage} onChange={(e) => setNewPrescription({ ...newPrescription, dosage: e.target.value })} placeholder="e.g., 500mg" />
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            <div className="med-input-group" style={{ marginBottom: 0 }}>
+              <label className="med-label">Frequency</label>
+              <input
+                className="med-input"
+                value={newPrescription.frequency}
+                onChange={(e) => setNewPrescription({ ...newPrescription, frequency: e.target.value })}
+                placeholder="e.g., Twice daily"
+              />
+            </div>
+            <div className="med-input-group" style={{ marginBottom: 0 }}>
+              <label className="med-label">Duration</label>
+              <input
+                className="med-input"
+                value={newPrescription.duration}
+                onChange={(e) => setNewPrescription({ ...newPrescription, duration: e.target.value })}
+                placeholder="e.g., 7 days"
+              />
+            </div>
           </div>
-        </div>
-        <div className="grid-2">
-          <div className="med-input-group">
-            <label className="med-label">Frequency</label>
-            <input className="med-input" value={newPrescription.frequency} onChange={(e) => setNewPrescription({ ...newPrescription, frequency: e.target.value })} placeholder="e.g., Twice daily" />
+
+          <div className="med-input-group" style={{ marginBottom: 0 }}>
+            <label className="med-label">Instructions</label>
+            <textarea
+              className="med-input"
+              value={newPrescription.instructions}
+              onChange={(e) => setNewPrescription({ ...newPrescription, instructions: e.target.value })}
+              placeholder="e.g., Take after meals, avoid alcohol..."
+              rows={2}
+              style={{ resize: 'vertical' }}
+            />
           </div>
-          <div className="med-input-group">
-            <label className="med-label">Duration</label>
-            <input className="med-input" value={newPrescription.duration} onChange={(e) => setNewPrescription({ ...newPrescription, duration: e.target.value })} placeholder="e.g., 7 days" />
+
+          <div className="med-input-group" style={{ marginBottom: 0 }}>
+            <label className="med-label">Prescribed By</label>
+            <input
+              className="med-input"
+              value={newPrescription.prescribedBy}
+              onChange={(e) => setNewPrescription({ ...newPrescription, prescribedBy: e.target.value })}
+              placeholder="e.g., Dr. Silva"
+            />
           </div>
+
+          <MedButton
+            onClick={handleAddPrescription}
+            style={{ width: '100%', marginTop: '4px', padding: '12px' }}
+          >
+            Save Prescription
+          </MedButton>
         </div>
-        <div className="med-input-group">
-          <label className="med-label">Instructions</label>
-          <textarea className="med-input" value={newPrescription.instructions} onChange={(e) => setNewPrescription({ ...newPrescription, instructions: e.target.value })} placeholder="Special instructions" rows={2} />
-        </div>
-        <div className="med-input-group">
-          <label className="med-label">Prescribed By</label>
-          <input className="med-input" value={newPrescription.prescribedBy} onChange={(e) => setNewPrescription({ ...newPrescription, prescribedBy: e.target.value })} placeholder="Doctor name" />
-        </div>
-        <Button onClick={handleAddPrescription} icon="💾">Save Prescription</Button>
       </Modal>
     </div>
   );
