@@ -220,9 +220,6 @@ export default function RecordsPage() {
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
               <h2 style={{ fontSize: '1.1rem', fontWeight: 600 }}>Prescriptions</h2>
-              <Button onClick={() => setShowAddPrescription(true)} icon="+" variant="secondary" size="sm">
-                Add Prescription
-              </Button>
             </div>
 
             {records.prescriptions.length === 0 ? (

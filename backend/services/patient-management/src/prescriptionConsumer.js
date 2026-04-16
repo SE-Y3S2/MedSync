@@ -30,19 +30,9 @@ const connectPrescriptionConsumer = async () => {
               return;
             }
 
-            // 1. Update Patient's Prescriptions Array
+            // 1. Update Patient's Documents (link only)
             const updatedPatient = await Patient.findByIdAndUpdate(patientId, {
               $push: {
-                prescriptions: {
-                  date: timestamp || new Date(),
-                  medication: medications.map(m => m.medication).join(', '),
-                  dosage: medications.map(m => `${m.medication}: ${m.dosage}`).join(' | '),
-                  frequency: medications.map(m => m.frequency).join(', '),
-                  duration: medications.map(m => m.duration).join(', '),
-                  instructions: instructions,
-                  prescribedBy: `Dr. ${doctorName}`,
-                  verificationId: verificationId || payload.prescriptionId // Global ID fallback
-                },
                 documents: {
                   fileName: `Prescription_${verificationId || payload.prescriptionId}.pdf`,
                   fileUrl: `/verify/${verificationId || payload.prescriptionId}`, 
