@@ -112,7 +112,172 @@ export const patientApi = {
     return parseOrThrow(response, 'Failed to delete document');
   },
 
-  // Doctor/admin scoped
+  // ── Account management ──
+  changePassword: async (data: { currentPassword: string; newPassword: string }) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/profile/change-password`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to change password');
+  },
+  deactivateAccount: async () => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/profile`, {
+      method: 'DELETE', headers: getAuthHeaders(),
+    });
+    return parseOrThrow(response, 'Failed to deactivate account');
+  },
+
+  // ── Allergies ──
+  getAllergies: async () => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/allergies`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch allergies');
+  },
+  addAllergy: async (data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/allergies`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to add allergy');
+  },
+  deleteAllergy: async (id: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/allergies/${id}`, {
+      method: 'DELETE', headers: getAuthHeaders(),
+    });
+    return parseOrThrow(response, 'Failed to remove allergy');
+  },
+
+  // ── Vital signs ──
+  getVitalSigns: async (limit?: number) => {
+    const url = limit ? `${PATIENT_SERVICE_URL}/vital-signs?limit=${limit}` : `${PATIENT_SERVICE_URL}/vital-signs`;
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch vital signs');
+  },
+  addVitalSign: async (data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/vital-signs`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to add vital sign');
+  },
+  deleteVitalSign: async (id: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/vital-signs/${id}`, {
+      method: 'DELETE', headers: getAuthHeaders(),
+    });
+    return parseOrThrow(response, 'Failed to remove vital sign');
+  },
+
+  // ── Vaccinations ──
+  getVaccinations: async () => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/vaccinations`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch vaccinations');
+  },
+  addVaccination: async (data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/vaccinations`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to add vaccination');
+  },
+  deleteVaccination: async (id: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/vaccinations/${id}`, {
+      method: 'DELETE', headers: getAuthHeaders(),
+    });
+    return parseOrThrow(response, 'Failed to remove vaccination');
+  },
+
+  // ── Chronic conditions ──
+  getChronicConditions: async () => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/chronic-conditions`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch chronic conditions');
+  },
+  addChronicCondition: async (data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/chronic-conditions`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to add condition');
+  },
+  updateChronicCondition: async (id: string, data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/chronic-conditions/${id}`, {
+      method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to update condition');
+  },
+  deleteChronicCondition: async (id: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/chronic-conditions/${id}`, {
+      method: 'DELETE', headers: getAuthHeaders(),
+    });
+    return parseOrThrow(response, 'Failed to remove condition');
+  },
+
+  // ── Family history ──
+  getFamilyHistory: async () => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/family-history`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch family history');
+  },
+  addFamilyHistory: async (data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/family-history`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to add family history');
+  },
+  deleteFamilyHistory: async (id: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/family-history/${id}`, {
+      method: 'DELETE', headers: getAuthHeaders(),
+    });
+    return parseOrThrow(response, 'Failed to remove family history');
+  },
+
+  // ── Insurance ──
+  getInsurance: async () => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/insurance`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch insurance');
+  },
+  updateInsurance: async (data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/insurance`, {
+      method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to update insurance');
+  },
+
+  // ── Medical history & prescriptions full CRUD ──
+  updateMedicalRecord: async (id: string, data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/records/history/${id}`, {
+      method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to update record');
+  },
+  deleteMedicalRecord: async (id: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/records/history/${id}`, {
+      method: 'DELETE', headers: getAuthHeaders(),
+    });
+    return parseOrThrow(response, 'Failed to delete record');
+  },
+  updatePrescription: async (id: string, data: any) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/records/prescriptions/${id}`, {
+      method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to update prescription');
+  },
+  deletePrescription: async (id: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/records/prescriptions/${id}`, {
+      method: 'DELETE', headers: getAuthHeaders(),
+    });
+    return parseOrThrow(response, 'Failed to delete prescription');
+  },
+
+  // ── Derived analytics ──
+  getHealthScore: async (patientId?: string) => {
+    const url = patientId
+      ? `${PATIENT_SERVICE_URL}/${patientId}/health-score`
+      : `${PATIENT_SERVICE_URL}/health-score`;
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch health score');
+  },
+  getMedicalSummary: async (patientId?: string) => {
+    const url = patientId
+      ? `${PATIENT_SERVICE_URL}/${patientId}/summary`
+      : `${PATIENT_SERVICE_URL}/summary`;
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch medical summary');
+  },
+
+  // ── Doctor/admin scoped ──
   getPatientFull: async (patientId: string) => {
     const response = await fetch(`${PATIENT_SERVICE_URL}/${patientId}/full`, { headers: getAuthHeaders() });
     return parseOrThrow(response, 'Failed to fetch patient record');
@@ -129,8 +294,18 @@ export const patientApi = {
     const response = await fetch(`${PATIENT_SERVICE_URL}/${patientId}/documents`, { headers: getAuthHeaders() });
     return parseOrThrow(response, 'Failed to fetch patient documents');
   },
-  listAllPatients: async () => {
-    const response = await fetch(PATIENT_SERVICE_URL, { headers: getAuthHeaders() });
+  getAuditLog: async (patientId: string) => {
+    const response = await fetch(`${PATIENT_SERVICE_URL}/${patientId}/audit-log`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch audit log');
+  },
+  listAllPatients: async (params?: { page?: number; limit?: number; search?: string; status?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.search) qs.set('search', params.search);
+    if (params?.status) qs.set('status', params.status);
+    const url = qs.toString() ? `${PATIENT_SERVICE_URL}?${qs}` : PATIENT_SERVICE_URL;
+    const response = await fetch(url, { headers: getAuthHeaders() });
     return parseOrThrow(response, 'Failed to list patients');
   },
 };
@@ -198,16 +373,75 @@ export const doctorApi = {
   },
 };
 
+export interface SymptomAnalyzePayload {
+  symptoms: string;
+  severity?: 'mild' | 'moderate' | 'severe' | 'unspecified';
+  durationDays?: number;
+  bodyLocation?: string;
+  additionalContext?: string;
+  patientId?: string;
+}
+
 export const symptomApi = {
-  analyzeSymptoms: async (symptoms: string, patientId?: string) => {
+  analyzeSymptoms: async (payload: string | SymptomAnalyzePayload, patientId?: string) => {
+    const body =
+      typeof payload === 'string' ? { symptoms: payload, patientId } : payload;
     const response = await fetch(`${SYMPTOM_CHECKER_URL}/analyze`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ symptoms, patientId }),
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(body),
     });
     return parseOrThrow(response, 'Failed to analyze symptoms');
   },
-  getHistory: async (patientId: string) => {
-    const response = await fetch(`${SYMPTOM_CHECKER_URL}/history/${patientId}`);
+  analyzeImage: async (formData: FormData) => {
+    const response = await fetch(`${SYMPTOM_CHECKER_URL}/analyze-image`, {
+      method: 'POST', headers: getAuthHeadersNoContentType(), body: formData,
+    });
+    return parseOrThrow(response, 'Failed to analyze image');
+  },
+
+  // Multi-turn conversation
+  startConversation: async (initialMessage: string) => {
+    const response = await fetch(`${SYMPTOM_CHECKER_URL}/conversations`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ initialMessage }),
+    });
+    return parseOrThrow(response, 'Failed to start conversation');
+  },
+  continueConversation: async (id: string, message: string) => {
+    const response = await fetch(`${SYMPTOM_CHECKER_URL}/conversations/${id}/messages`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify({ message }),
+    });
+    return parseOrThrow(response, 'Failed to send message');
+  },
+  closeConversation: async (id: string) => {
+    const response = await fetch(`${SYMPTOM_CHECKER_URL}/conversations/${id}/close`, {
+      method: 'PUT', headers: getAuthHeaders(),
+    });
+    return parseOrThrow(response, 'Failed to close conversation');
+  },
+  listConversations: async (patientId?: string) => {
+    const url = patientId
+      ? `${SYMPTOM_CHECKER_URL}/conversations/patient/${patientId}`
+      : `${SYMPTOM_CHECKER_URL}/conversations`;
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to list conversations');
+  },
+
+  // History & individual checks
+  getHistory: async (patientId: string, page = 1, limit = 20) => {
+    const response = await fetch(
+      `${SYMPTOM_CHECKER_URL}/history/${patientId}?page=${page}&limit=${limit}`,
+      { headers: getAuthHeaders() }
+    );
     return parseOrThrow(response, 'Failed to fetch symptom history');
+  },
+  getCheck: async (id: string) => {
+    const response = await fetch(`${SYMPTOM_CHECKER_URL}/checks/${id}`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch check');
+  },
+
+  // Admin
+  getAdminAnalytics: async () => {
+    const response = await fetch(`${SYMPTOM_CHECKER_URL}/admin/analytics`, { headers: getAuthHeaders() });
+    return parseOrThrow(response, 'Failed to fetch analytics');
   },
 };
 

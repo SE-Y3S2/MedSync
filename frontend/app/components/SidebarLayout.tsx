@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext';
 import {
   UserCog, Stethoscope, Clock, Calendar, Home,
   Search, CalendarClock, User, FileText, Bot, Video, LayoutDashboard,
-  Users, LineChart, CreditCard, LogOut,
+  Users, LineChart, CreditCard, LogOut, HeartPulse, Brain,
 } from 'lucide-react';
 
 const getNavItems = (role?: string) => {
@@ -21,6 +21,7 @@ const getNavItems = (role?: string) => {
       { href: '/admin/appointments', label: 'All Appointments', icon: <Calendar size={20} /> },
       { href: '/admin/payments', label: 'System Payments', icon: <CreditCard size={20} /> },
       { href: '/admin/oversight', label: 'Platform Oversight', icon: <LineChart size={20} /> },
+      { href: '/admin/ai-insights', label: 'AI Triage Insights', icon: <Brain size={20} /> },
     ];
   }
   if (role === 'doctor') {
@@ -37,6 +38,7 @@ const getNavItems = (role?: string) => {
     { href: '/appointment', label: 'My Appointments', icon: <CalendarClock size={20} /> },
     { href: '/telemedicine', label: 'Join Consultation', icon: <Video size={20} /> },
     { href: '/patient/profile', label: 'My Profile', icon: <User size={20} /> },
+    { href: '/patient/health', label: 'Health Profile', icon: <HeartPulse size={20} /> },
     { href: '/patient/records', label: 'Records & Documents', icon: <FileText size={20} /> },
     { href: '/symptom-checker', label: 'AI Symptom Checker', icon: <Bot size={20} /> },
     { href: '/payment', label: 'Billing & Payments', icon: <CreditCard size={20} /> },
