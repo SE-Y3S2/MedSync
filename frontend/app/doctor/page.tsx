@@ -4,7 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useAuth } from '../context/AuthContext';
 import { doctorApi, appointmentApi } from '../services/api';
-import { Clock, Video, User, List, CheckCircle, AlertCircle, BarChart2, TrendingUp } from 'lucide-react';
+import { Clock, Video, User, List, CheckCircle, AlertCircle, BarChart2, TrendingUp, Calendar, ArrowRight, UserCheck } from 'lucide-react';
 import { showToast } from '../components/UI';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Cell } from 'recharts';
 
@@ -31,7 +31,6 @@ export default function DoctorDashboard() {
       setAppointments(appts || []);
       setDoctorDetails(docInfo);
       
-      // Load analytics (bonus feature)
       try {
         const analyticsData = await doctorApi.getAnalytics(user!.id);
         setAnalytics(analyticsData);
@@ -46,217 +45,315 @@ export default function DoctorDashboard() {
     }
   };
 
-  if (isLoading || loadingData) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="loading-spinner"></div>
-      <p className="ml-3 text-slate-500">Loading your dashboard...</p>
-    </div>
-  );
+  // ── Name Normalization (Fix "Dr. Dr.") ──
+  const getCleanName = (name: string) => {
+    if (!name) return '';
+    // Remove "Dr." or "Dr " or "Dr. " from the start (case-insensitive)
+    const clean = name.replace(/^(dr\.?\s*)+/i, '').trim();
+    return `Dr. ${clean}`;
+  };
+
+  /* ── Loading State ── */
+  if (isLoading || loadingData) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '80vh', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="loading-spinner" style={{ borderTopColor: '#004A99', width: '40px', height: '40px', margin: '0 auto 16px' }}></div>
+          <p style={{ color: '#64748b', fontSize: '0.95rem' }}>Accessing Medical Records...</p>
+        </div>
+      </div>
+    );
+  }
   
-  if (user?.role !== 'doctor') return (
-    <div className="med-card urgency-high">
-      <h3 className="flex items-center gap-2"><AlertCircle size={20} /> Access Denied</h3>
-      <p>This area is reserved for medical professionals.</p>
-    </div>
-  );
+  if (user?.role !== 'doctor') {
+    return (
+      <div style={{ padding: '40px', textAlign: 'center', fontFamily: "'IBM Plex Sans', sans-serif" }}>
+        <div style={{ background: '#fff1f2', border: '1px solid #fecaca', padding: '24px', borderRadius: '12px', maxWidth: '500px', margin: '0 auto' }}>
+          <AlertCircle size={40} color="#e11d48" style={{ marginBottom: '16px' }} />
+          <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#9f1239', marginBottom: '8px' }}>Access Restricted</h3>
+          <p style={{ color: '#be123c' }}>This dashboard is exclusively for verified medical practitioners.</p>
+        </div>
+      </div>
+    );
+  }
 
   const pending = appointments.filter(a => a.status === 'pending');
   const confirmed = appointments.filter(a => a.status === 'confirmed');
+  const finished = appointments.filter(a => a.status === 'completed');
+
+  /* ── Component Styles ── */
+  const styles = {
+    container: {
+      fontFamily: "'IBM Plex Sans', sans-serif",
+      color: '#1e293b',
+      background: 'transparent',
+      maxWidth: '1200px',
+      margin: '0 auto',
+      paddingBottom: '40px',
+    },
+    headerCard: {
+      background: '#fff',
+      borderRadius: '16px',
+      overflow: 'hidden',
+      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.05), 0 2px 4px -1px rgba(0,0,0,0.03)',
+      border: '1px solid #e2e8f0',
+      marginBottom: '32px',
+    },
+    banner: {
+      height: '160px',
+      background: 'linear-gradient(135deg, #001A38 0%, #004A99 100%)',
+    },
+    profileSection: {
+      padding: '0 32px 32px',
+      marginTop: '-80px',
+      display: 'flex',
+      flexWrap: 'wrap' as const,
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      gap: '24px',
+    },
+    avatar: {
+      width: '120px',
+      height: '120px',
+      borderRadius: '24px',
+      background: '#fff',
+      padding: '4px',
+      boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      fontSize: '40px',
+      fontWeight: 700,
+      color: '#004A99',
+      border: '1px solid #f1f5f9',
+    },
+    statCard: {
+      background: '#fff',
+      padding: '24px',
+      borderRadius: '16px',
+      border: '1px solid #e2e8f0',
+      boxShadow: '0 4px 6px -1px rgba(0,0,0,0.02)',
+      display: 'flex',
+      flexDirection: 'column' as const,
+      justifyContent: 'space-between',
+      minHeight: '120px',
+    },
+    sectionTitle: {
+      fontSize: '1.25rem',
+      fontWeight: 700,
+      color: '#0f172a',
+      marginBottom: '20px',
+      display: 'flex',
+      alignItems: 'center',
+      gap: '10px',
+    },
+    grid: {
+      display: 'grid',
+      gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+      gap: '24px',
+      marginBottom: '32px',
+    },
+    analyticsBox: {
+      background: '#fff',
+      borderRadius: '20px',
+      padding: '28px',
+      border: '1px solid #e2e8f0',
+      boxShadow: '0 4px 10px rgba(0,0,0,0.03)',
+      minHeight: '400px',
+    },
+    actionItem: {
+      background: '#f8fafc',
+      padding: '16px 20px',
+      borderRadius: '12px',
+      border: '1px solid #f1f5f9',
+      marginBottom: '12px',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: '16px',
+      transition: 'all 0.2s ease',
+    }
+  };
 
   return (
-    <div className="animate-in space-y-8">
-      {/* Profile Header Card */}
-      <div className="med-card overflow-hidden !p-0">
-        <div className="h-24 bg-gradient-to-r from-blue-600 to-indigo-700"></div>
-        <div className="px-8 pb-8 -mt-12 relative flex flex-col md:flex-row md:items-end md:justify-between gap-6">
-          <div className="flex flex-col md:flex-row items-center md:items-end gap-6 text-center md:text-left">
-            <div className="w-32 h-32 rounded-2xl bg-white p-1 shadow-xl">
-              <div className="w-full h-full rounded-xl bg-slate-100 flex items-center justify-center text-4xl font-bold text-blue-600 uppercase border-2 border-slate-50">
-                {user.name.charAt(0)}
-              </div>
+    <div style={styles.container}>
+      {/* ── Header ── */}
+      <div style={styles.headerCard}>
+        <div style={styles.banner}></div>
+        <div style={styles.profileSection}>
+          <div style={{ display: 'flex', alignItems: 'flex-end', gap: '24px', flexWrap: 'wrap' }}>
+            <div style={styles.avatar}>
+              {user.name.charAt(0)}
             </div>
-            <div className="mb-2">
-              <h1 className="text-3xl font-extrabold text-slate-900 leading-tight">Dr. {user.name}</h1>
-              <p className="text-blue-600 font-medium">{doctorDetails?.specialty || 'Medical Specialist'}</p>
-              {!doctorDetails?.isVerified && (
-                <div className="mt-2 flex items-center justify-center md:justify-start gap-1 text-xs font-semibold px-2.5 py-1 bg-amber-50 text-amber-700 rounded-full border border-amber-100">
-                  <AlertCircle size={14} /> Verification Pending
-                </div>
-              )}
+            <div style={{ paddingBottom: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+                <h1 style={{ fontSize: '2.25rem', fontWeight: 800, color: '#ffffff', letterSpacing: '-0.02em', textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>
+                  {getCleanName(user.name)}
+                </h1>
+                {doctorDetails?.isVerified && <CheckCircle size={22} color="#ffffff" />}
+              </div>
+              <p style={{ fontSize: '1.1rem', color: '#000000', fontWeight: 600, marginBottom: '0' }}>
+                {doctorDetails?.specialty || 'Medical Practitioner'}
+              </p>
             </div>
           </div>
-          <div className="flex gap-3">
-             <Link href="/doctor/profile" className="med-button secondary flex items-center gap-2 px-6 shadow-sm">
-                <User size={18} /> Edit Profile
-             </Link>
+          <div style={{ paddingBottom: '8px' }}>
+            <Link href="/doctor/profile" style={{ textDecoration: 'none' }}>
+              <button style={{ background: '#fff', border: '1px solid #cbd5e1', padding: '10px 20px', borderRadius: '10px', fontWeight: 600, color: '#334155', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', transition: 'all 0.2s', fontSize: '0.9rem' }}>
+                <User size={18} /> Master Profile
+              </button>
+            </Link>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <div className="med-card !p-6 flex flex-col justify-between border-l-4 border-l-blue-500">
-          <div className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Total Patients</div>
-          <div className="text-3xl font-bold text-slate-900">24</div>
+      {/* ── Stats Grid ── */}
+      <div style={styles.grid}>
+        <div style={{ ...styles.statCard, borderLeft: '4px solid #004A99' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Total Patients</span>
+          <div style={{ fontSize: '2.25rem', fontWeight: 800, color: '#0f172a' }}>{24 + finished.length}</div>
         </div>
-        <div className="med-card !p-6 flex flex-col justify-between border-l-4 border-l-amber-500">
-          <div className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Pending Requests</div>
-          <div className="text-3xl font-bold text-slate-900">{pending.length}</div>
+        <div style={{ ...styles.statCard, borderLeft: '4px solid #f59e0b' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Pending Reviews</span>
+          <div style={{ fontSize: '2.25rem', fontWeight: 800, color: '#0f172a' }}>{pending.length}</div>
         </div>
-        <div className="med-card !p-6 flex flex-col justify-between border-l-4 border-l-success">
-          <div className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Upcoming Today</div>
-          <div className="text-3xl font-bold text-slate-900">{confirmed.length}</div>
+        <div style={{ ...styles.statCard, borderLeft: '4px solid #10b981' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Active Today</span>
+          <div style={{ fontSize: '2.25rem', fontWeight: 800, color: '#0f172a' }}>{confirmed.length}</div>
         </div>
-        <div className="med-card !p-6 flex flex-col justify-between border-l-4 border-l-indigo-500 text-indigo-700 font-bold">
-           {analytics ? (
-              <div className="w-full h-full">
-                <div className="text-slate-500 text-sm font-semibold uppercase tracking-wider mb-1">Prescribed</div>
-                <div className="text-3xl font-bold text-slate-900">{analytics.totalPrescriptions || 0}</div>
+        <div style={{ ...styles.statCard, borderLeft: '4px solid #6366f1' }}>
+          <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Issued Prescriptions</span>
+          <div style={{ fontSize: '2.25rem', fontWeight: 800, color: '#0f172a' }}>{analytics?.totalPrescriptions || 0}</div>
+        </div>
+      </div>
+
+      {/* ── Charts Section ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '32px', marginBottom: '40px' }}>
+        <div style={styles.analyticsBox}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '32px' }}>
+            <div>
+              <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>Performance Trend</h3>
+              <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Statistical report for the past 7 days</p>
+            </div>
+            <div style={{ display: 'flex', gap: '16px' }}>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#004A99' }}></div> Appts
+               </div>
+               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '10px', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>
+                  <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#818cf8' }}></div> Rx
+               </div>
+            </div>
+          </div>
+          
+          <div style={{ height: '280px', width: '100%' }}>
+            {analytics?.prescriptionTrend ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={analytics.prescriptionTrend}>
+                  <defs>
+                    <linearGradient id="dbColorApp" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#004A99" stopOpacity={0.1}/>
+                      <stop offset="95%" stopColor="#004A99" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="date" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} 
+                    dy={10}
+                    tickFormatter={(str) => new Date(str).toLocaleDateString(undefined, { weekday: 'short' })}
+                  />
+                  <YAxis hide />
+                  <Tooltip 
+                    contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)', padding: '12px' }}
+                    labelStyle={{ fontSize: '10px', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', marginBottom: '4px' }}
+                  />
+                  <Area type="monotone" dataKey="appointments" stroke="#004A99" strokeWidth={3} fill="url(#dbColorApp)" fillOpacity={1} />
+                  <Area type="monotone" dataKey="prescriptions" stroke="#818cf8" strokeWidth={3} fill="transparent" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: '16px', color: '#94a3b8', fontSize: '0.9rem' }}>
+                Collecting trend data...
               </div>
-           ) : (
-              <div className="opacity-50 italic font-normal text-sm">Analytics loading...</div>
-           )}
+            )}
+          </div>
+        </div>
+
+        <div style={styles.analyticsBox}>
+          <div style={{ marginBottom: '32px' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', marginBottom: '4px' }}>Reach & Impact</h3>
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Pharmacy engagement and prescription volume</p>
+          </div>
+          <div style={{ height: '280px', width: '100%' }}>
+            {analytics?.prescriptionTrend ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={analytics.prescriptionTrend}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                  <XAxis 
+                    dataKey="date" 
+                    axisLine={false} 
+                    tickLine={false} 
+                    tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 700}} 
+                    dy={10}
+                    tickFormatter={(str) => new Date(str).toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}
+                  />
+                  <Tooltip cursor={{fill: '#f1f5f9', radius: 8}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 25px -5px rgba(0,0,0,0.1)' }} />
+                  <Bar dataKey="prescriptions" radius={[6, 6, 0, 0]} barSize={20}>
+                    {analytics.prescriptionTrend.map((entry: any, index: number) => (
+                      <Cell key={`cell-${index}`} fill={entry.prescriptions > 0 ? '#6366f1' : '#e2e8f0'} />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8fafc', borderRadius: '16px', color: '#94a3b8', fontSize: '0.9rem' }}>
+                Analyzing impact metrics...
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Analytics Visualization Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-         <div className="med-card min-h-[400px] flex flex-col">
-            <div className="flex items-center justify-between mb-8">
-               <div>
-                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                     <TrendingUp className="text-blue-500" size={22} /> Performance Trends
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-1">Activity over the last 7 days</p>
-               </div>
-               <div className="flex gap-4">
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                     <div className="w-2 h-2 rounded-full bg-blue-500"></div> Appointments
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                     <div className="w-2 h-2 rounded-full bg-indigo-400"></div> Prescriptions
-                  </div>
-               </div>
-            </div>
-            
-            <div className="flex-1 mt-auto">
-               {analytics?.prescriptionTrend ? (
-                  <ResponsiveContainer width="100%" height={280}>
-                     <AreaChart data={analytics.prescriptionTrend}>
-                        <defs>
-                           <linearGradient id="colorApp" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.1}/>
-                              <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                           </linearGradient>
-                           <linearGradient id="colorPres" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#818cf8" stopOpacity={0.1}/>
-                              <stop offset="95%" stopColor="#818cf8" stopOpacity={0}/>
-                           </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                        <XAxis 
-                          dataKey="date" 
-                          axisLine={false} 
-                          tickLine={false} 
-                          tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} 
-                          dy={10}
-                          tickFormatter={(str) => {
-                             const date = new Date(str);
-                             return date.toLocaleDateString(undefined, { weekday: 'short' });
-                          }}
-                        />
-                        <YAxis hide domain={['auto', 'auto']} />
-                        <Tooltip 
-                           contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
-                           itemStyle={{ fontWeight: 700, fontSize: '12px' }}
-                           labelStyle={{ color: '#64748b', fontSize: '10px', marginBottom: '4px', textTransform: 'uppercase', fontWeight: 800 }}
-                        />
-                        <Area type="monotone" dataKey="appointments" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorApp)" />
-                        <Area type="monotone" dataKey="prescriptions" stroke="#818cf8" strokeWidth={3} fillOpacity={1} fill="url(#colorPres)" />
-                     </AreaChart>
-                  </ResponsiveContainer>
-               ) : (
-                  <div className="w-full h-full flex items-center justify-center bg-slate-50 rounded-2xl animate-pulse">
-                     <p className="text-slate-400 text-sm">Visualizing performance data...</p>
-                  </div>
-               )}
-            </div>
-         </div>
-
-         <div className="med-card min-h-[400px] flex flex-col">
-            <div className="flex items-center justify-between mb-8">
-               <div>
-                  <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                     <BarChart2 className="text-indigo-500" size={22} /> Reach & Impact
-                  </h3>
-                  <p className="text-xs text-slate-400 mt-1">Pharmacy engagement metrics</p>
-               </div>
-            </div>
-
-            <div className="flex-1 mt-auto">
-                {analytics?.prescriptionTrend ? (
-                   <ResponsiveContainer width="100%" height={280}>
-                      <BarChart data={analytics.prescriptionTrend}>
-                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                         <XAxis 
-                           dataKey="date" 
-                           axisLine={false} 
-                           tickLine={false} 
-                           tick={{fill: '#94a3b8', fontSize: 10, fontWeight: 600}} 
-                           dy={10}
-                           tickFormatter={(str) => {
-                              const date = new Date(str);
-                              return date.toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
-                           }}
-                         />
-                         <Tooltip 
-                            cursor={{fill: '#f8fafc', radius: 8}}
-                            contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', padding: '12px' }}
-                         />
-                         <Bar dataKey="prescriptions" radius={[6, 6, 0, 0]} barSize={24}>
-                            {analytics.prescriptionTrend.map((entry: any, index: number) => (
-                               <Cell key={`cell-${index}`} fill={entry.prescriptions > 0 ? '#6366f1' : '#e2e8f0'} />
-                            ))}
-                         </Bar>
-                      </BarChart>
-                   </ResponsiveContainer>
-                ) : (
-                   <div className="w-full h-full flex items-center justify-center bg-slate-50 rounded-2xl">
-                      <p className="text-slate-400 text-sm">Aggregating records...</p>
-                   </div>
-                )}
-            </div>
-         </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 space-y-6">
-          <div className="med-card">
-            <div className="flex items-center justify-between mb-6">
-              <h3 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-                <AlertCircle className="text-amber-500" size={22} /> Action Needed
-              </h3>
-              <Link href="/doctor/appointments" className="text-blue-600 text-sm font-bold hover:underline">View All</Link>
+      <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '32px' }}>
+        {/* ── Main Panel ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+          {/* Action Center */}
+          <div style={{ background: '#fff', padding: '32px', borderRadius: '20px', border: '1px solid #e2e8f0', boxShadow: '0 4px 10px rgba(0,0,0,0.03)' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+              <h3 style={styles.sectionTitle}><AlertCircle color="#f59e0b" size={24} /> Clinical Tasks</h3>
+              <Link href="/doctor/appointments" style={{ color: '#004A99', fontSize: '0.85rem', fontWeight: 700, textDecoration: 'none' }}>View All Registry</Link>
             </div>
             
             {pending.length === 0 ? (
-              <div className="py-8 text-center bg-slate-50 rounded-xl border border-dashed border-slate-200">
-                <CheckCircle className="mx-auto text-slate-300 mb-2" size={32} />
-                <p className="text-slate-500">You're all caught up!</p>
+              <div style={{ padding: '48px', textAlign: 'center', background: '#f8fafc', borderRadius: '16px', border: '1px dashed #e2e8f0' }}>
+                <UserCheck size={40} color="#cbd5e1" style={{ marginBottom: '12px' }} />
+                <p style={{ color: '#64748b', fontSize: '0.95rem' }}>No clinical tasks requiring immediate review.</p>
               </div>
             ) : (
-              <div className="space-y-4">
-                {pending.slice(0, 3).map(a => (
-                  <div key={a._id} className="history-item group transition-all hover:bg-slate-50">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div>
+                {pending.slice(0, 4).map(a => (
+                  <div key={a._id} style={styles.actionItem} onMouseEnter={(e) => e.currentTarget.style.background = '#f1f5f9'} onMouseLeave={(e) => e.currentTarget.style.background = '#f8fafc'}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                      <div style={{ width: '48px', height: '48px', borderRadius: '12px', background: '#fff', border: '1px solid #e2e8f0', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 700, color: '#004A99' }}>
+                        {a.patientName.charAt(0)}
+                      </div>
                       <div>
-                        <div className="font-bold text-slate-900 text-lg">{a.patientName}</div>
-                        <div className="flex items-center gap-4 text-sm text-slate-500 mt-1">
-                          <span className="flex items-center gap-1"><Clock size={14} /> {new Date(a.slotDate).toLocaleDateString()} at {a.slotTime}</span>
-                          <span className="bg-slate-100 px-2 py-0.5 rounded text-xs">Reason: {a.reason || 'Checkup'}</span>
+                        <div style={{ fontWeight: 700, color: '#0f172a', fontSize: '1rem' }}>{a.patientName}</div>
+                        <div style={{ fontSize: '0.8rem', color: '#64748b', marginTop: '2px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                          <Calendar size={12} /> {new Date(a.slotDate).toLocaleDateString()} at {a.slotTime}
                         </div>
                       </div>
-                      <Link href="/doctor/appointments" className="med-button primary sm shadow-md group-hover:scale-105 transition-transform">
-                        Review Request
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', background: '#fff', padding: '4px 10px', borderRadius: '6px', border: '1px solid #e2e8f0' }}>
+                        {a.reason || 'Symptom Triage'}
+                      </span>
+                      <Link href="/doctor/appointments" style={{ textDecoration: 'none' }}>
+                        <button style={{ height: '36px', width: '36px', borderRadius: '10px', background: '#004A99', border: 'none', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                          <ArrowRight size={18} />
+                        </button>
                       </Link>
                     </div>
                   </div>
@@ -264,44 +361,37 @@ export default function DoctorDashboard() {
               </div>
             )}
           </div>
-
-          <div className="med-card">
-            <h3 className="text-xl font-bold text-slate-900 mb-6 flex items-center gap-2">
-              <Video className="text-blue-500" size={22} /> Recent Consultations
-            </h3>
-            <p className="text-slate-400 italic text-center py-12">Session history integration coming soon...</p>
-          </div>
         </div>
 
-        <div className="space-y-6">
-          <div className="med-card bg-slate-900 text-white border-0 shadow-2xl">
-            <h3 className="text-lg font-bold mb-6">Quick Tools</h3>
-            <div className="space-y-3">
-              <Link href="/doctor/availability" className="flex items-center justify-between p-4 rounded-xl bg-white/10 hover:bg-white/20 transition-all group">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-400 group-hover:text-indigo-300">
-                    <Clock size={20} />
+        {/* ── Sidebar Tools ── */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
+           <div style={{ background: '#001A38', padding: '28px', borderRadius: '20px', color: '#fff', boxShadow: '0 20px 40px rgba(0,0,0,0.15)' }}>
+              <h3 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '24px', color: '#fff' }}>Medical Suite</h3>
+              
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                <Link href="/doctor/availability" style={{ textDecoration: 'none' }}>
+                  <div style={{ padding: '16px', borderRadius: '14px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: '16px', color: '#fff' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(59, 130, 246, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}>
+                       <Clock size={20} />
+                    </div>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Schedule Hub</span>
                   </div>
-                  <span className="font-semibold text-slate-100">My Schedule</span>
-                </div>
-                <div className="text-slate-500 group-hover:text-slate-200">→</div>
-              </Link>
+                </Link>
 
-              <Link href="/doctor/appointments" className="flex items-center justify-between p-4 rounded-xl bg-white/10 hover:bg-white/20 transition-all group">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-blue-500/20 flex items-center justify-center text-blue-400 group-hover:text-blue-300">
-                    <List size={20} />
+                <Link href="/doctor/appointments" style={{ textDecoration: 'none' }}>
+                  <div style={{ padding: '16px', borderRadius: '14px', background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', gap: '16px', color: '#fff' }}>
+                    <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'rgba(129, 140, 248, 0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a5b4fc' }}>
+                       <List size={20} />
+                    </div>
+                    <span style={{ fontWeight: 600, fontSize: '0.9rem' }}>Appointment Registry</span>
                   </div>
-                  <span className="font-semibold text-slate-100">Appointments</span>
+                </Link>
+
+                <div style={{ marginTop: '20px', padding: '16px', background: 'rgba(59, 130, 246, 0.1)', borderRadius: '12px', fontSize: '0.75rem', color: '#93c5fd', lineHeight: '1.5', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                  <strong>Update:</strong> You can now view real-time patient symptom analysis before the consultation starts.
                 </div>
-                <div className="text-slate-500 group-hover:text-slate-200">→</div>
-              </Link>
-            </div>
-            
-            <div className="mt-8 p-4 bg-blue-500/10 rounded-xl border border-blue-500/20 text-blue-300 text-xs leading-relaxed">
-              <strong>Tip:</strong> Keep your availability up to date to ensure patients can book consultations at your preferred times.
-            </div>
-          </div>
+              </div>
+           </div>
         </div>
       </div>
     </div>
