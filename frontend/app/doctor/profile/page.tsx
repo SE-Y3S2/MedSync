@@ -14,6 +14,7 @@ export default function DoctorProfile() {
   const [profile, setProfile] = useState({
     name: '',
     specialty: '',
+    consultationFee: 0,
     bio: '',
     contact: {
       email: '',
@@ -36,6 +37,7 @@ export default function DoctorProfile() {
       setProfile({
         name: data.name || '',
         specialty: data.specialty || '',
+        consultationFee: Number(data.consultationFee || 0),
         bio: data.bio || '',
         contact: {
           email: data.contact?.email || '',
@@ -244,6 +246,18 @@ export default function DoctorProfile() {
                   onChange={(e) => setProfile({...profile, specialty: e.target.value})}
                   placeholder="e.g. Cardiology, Radiology"
                   required
+                />
+              </div>
+
+              <div style={styles.inputGroup}>
+                <label style={styles.label}>Consultation Fee (LKR)</label>
+                <input
+                  style={styles.input}
+                  type="number"
+                  min={0}
+                  value={profile.consultationFee}
+                  onChange={(e) => setProfile({ ...profile, consultationFee: Number(e.target.value || 0) })}
+                  placeholder="e.g. 2500"
                 />
               </div>
 

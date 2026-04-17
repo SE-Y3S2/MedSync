@@ -2,7 +2,6 @@ services:
   # ─── Infrastructure ────────────────────────────────────────────────────────
   zookeeper:
     image: confluentinc/cp-zookeeper:7.4.0
-    restart: always
     environment:
       ZOOKEEPER_CLIENT_PORT: 2181
       ZOOKEEPER_TICK_TIME: 2000
@@ -16,7 +15,6 @@ services:
 
   kafka:
     image: confluentinc/cp-kafka:7.4.0
-    restart: always
     depends_on:
       zookeeper:
         condition: service_healthy
@@ -35,7 +33,6 @@ services:
 
   mongo:
     image: mongo:6.0
-    restart: always
     ports:
       - "27017:27017"
     volumes:
@@ -48,7 +45,6 @@ services:
 
   redis:
     image: redis:7.0-alpine
-    restart: always
     ports:
       - "6379:6379"
     volumes:
@@ -62,7 +58,6 @@ services:
   # ─── Backend Services ──────────────────────────────────────────────────────
   auth:
     build: ./backend/services/auth
-    restart: always
     ports:
       - "${AUTH_PORT:-5000}:5000"
     depends_on:
@@ -70,6 +65,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/auth_db
       - PORT=5000
     dns:
       - 8.8.8.8
@@ -77,7 +73,6 @@ services:
 
   notification:
     build: ./backend/services/notification
-    restart: always
     ports:
       - "${NOTIFICATION_PORT:-3006}:3006"
     depends_on:
@@ -89,7 +84,6 @@ services:
 
   patient-management:
     build: ./backend/services/patient-management
-    restart: always
     ports:
       - "${PATIENT_PORT:-3001}:3001"
     depends_on:
@@ -99,6 +93,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/patient_db
       - PORT=3001
     dns:
       - 8.8.8.8
@@ -106,7 +101,6 @@ services:
 
   doctor-management:
     build: ./backend/services/doctor-management
-    restart: always
     ports:
       - "${DOCTOR_PORT:-3002}:3002"
     depends_on:
@@ -116,6 +110,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/doctor_db
       - PORT=3002
     dns:
       - 8.8.8.8
@@ -123,7 +118,6 @@ services:
 
   appointment:
     build: ./backend/services/appointment
-    restart: always
     ports:
       - "${APPOINTMENT_PORT:-3003}:3003"
     depends_on:
@@ -133,6 +127,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/appointment_db
       - DOCTOR_SERVICE_URL=http://doctor-management:3002
       - PORT=3003
     dns:
@@ -141,7 +136,6 @@ services:
 
   telemedicine:
     build: ./backend/services/telemedicine
-    restart: always
     ports:
       - "${TELEMEDICINE_PORT:-3004}:3004"
     depends_on:
@@ -153,11 +147,11 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/telemedicine_db
       - PORT=3004
 
   payment:
     build: ./backend/services/payment
-    restart: always
     ports:
       - "${PAYMENT_PORT:-3005}:3005"
     depends_on:
@@ -167,6 +161,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/payment_db
       - PORT=3005
     dns:
       - 8.8.8.8
@@ -174,7 +169,6 @@ services:
 
   ai-symptom-checker:
     build: ./backend/services/ai-symptom-checker
-    restart: always
     ports:
       - "${AI_PORT:-3007}:3007"
     depends_on:
@@ -184,6 +178,7 @@ services:
         condition: service_healthy
     env_file: ./.env
     environment:
+      - MONGO_URI=${MONGO_BASE:-mongodb://mongo:27017}/symptom_db
       - PORT=3007
     dns:
       - 8.8.8.8
@@ -202,7 +197,6 @@ services:
         NEXT_PUBLIC_NOTIFICATION_SERVICE_URL: http://localhost:${NOTIFICATION_PORT:-3006}/api/notify
         NEXT_PUBLIC_SYMPTOM_CHECKER_URL: http://localhost:${AI_PORT:-3007}/api/symptom-checker
         NEXT_PUBLIC_GROQ_KEY: ${NEXT_PUBLIC_GROQ_KEY}
-    restart: always
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     env_file: ./.env

@@ -351,6 +351,18 @@ export const doctorApi = {
     });
     return parseOrThrow(response, 'Failed to add slot');
   },
+  addAvailabilityBulk: async (id: string, data: { days: string[]; slots: Array<{ startTime: string; endTime: string }> }) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/${id}/availability/bulk`, {
+      method: 'POST', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to add weekly slots');
+  },
+  updateAvailability: async (id: string, slotId: string, data: { day: string; startTime: string; endTime: string }) => {
+    const response = await fetch(`${DOCTOR_SERVICE_URL}/${id}/availability/${slotId}`, {
+      method: 'PUT', headers: getAuthHeaders(), body: JSON.stringify(data),
+    });
+    return parseOrThrow(response, 'Failed to update slot');
+  },
   deleteAvailability: async (id: string, slotId: string) => {
     const response = await fetch(`${DOCTOR_SERVICE_URL}/${id}/availability/${slotId}`, {
       method: 'DELETE', headers: getAuthHeaders(),

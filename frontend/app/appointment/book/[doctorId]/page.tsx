@@ -44,7 +44,11 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
         fetchData();
     }, [doctorId, router, authLoading, user]);
 
-    const selectedDoctorFee = useMemo(() => Number(doctor?.consultationFee || 0), [doctor]);
+    const selectedDoctorFee = useMemo(() => {
+        const raw = doctor?.consultationFee;
+        const parsed = Number(raw);
+        return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+    }, [doctor]);
 
     useEffect(() => {
         if (!date || availability.length === 0) {
@@ -91,6 +95,11 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
             return;
         }
 
+        if (selectedDoctorFee <= 0) {
+            showToast('Doctor consultation fee is not configured yet. Please try another doctor or contact support.', 'warning');
+            return;
+        }
+
         setBooking(true);
         try {
             await appointmentApi.createAppointment({
@@ -103,7 +112,7 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
                 slotDate: date,
                 slotTime: slot,
                 reason,
-                consultationFee: doctor.consultationFee || 500
+                consultationFee: selectedDoctorFee
             });
 
             showToast('Appointment booked successfully!', 'success');
@@ -138,7 +147,9 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
                         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '10px' }}>
                             <div style={{ background: 'var(--bg-light)', borderRadius: '16px', padding: '14px' }}>
                                 <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>Consultation fee</div>
-                                <div style={{ fontWeight: 800, marginTop: '4px' }}>LKR {selectedDoctorFee.toLocaleString()}</div>
+                                <div style={{ fontWeight: 800, marginTop: '4px' }}>
+                                    {selectedDoctorFee > 0 ? `LKR ${selectedDoctorFee.toLocaleString()}` : 'Fee not set'}
+                                </div>
                             </div>
                             <div style={{ background: 'var(--bg-light)', borderRadius: '16px', padding: '14px' }}>
                                 <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)' }}>Rating</div>
@@ -221,11 +232,11 @@ export default function BookingPage({ params }: { params: Promise<{ doctorId: st
                             </div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
                                 <span>Estimated fee</span>
-                                <strong>LKR {selectedDoctorFee.toLocaleString()}</strong>
+                                <strong>{selectedDoctorFee > 0 ? `LKR ${selectedDoctorFee.toLocaleString()}` : 'Fee not set'}</strong>
                             </div>
                         </div>
 
-                        <Button onClick={handleBooking} disabled={booking} className="navy" style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} icon={<CreditCard size={16} />}>
+                        <Button onClick={handleBooking} disabled={booking || selectedDoctorFee <= 0} className="navy" style={{ width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }} icon={<CreditCard size={16} />}>
                             {booking ? 'Reserving...' : 'Confirm and continue'}
                         </Button>
                     </div>

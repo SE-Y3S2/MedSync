@@ -44,7 +44,7 @@ export const Button = ({ children, onClick, type = 'button', variant = 'primary'
 );
 
 /* ── Input ── */
-interface InputProps {
+interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElement>, 'value' | 'onChange'> {
   label?: string;
   type?: string;
   value: string;
@@ -54,7 +54,7 @@ interface InputProps {
   disabled?: boolean;
 }
 
-export const Input = ({ label, type = 'text', value, onChange, placeholder, required = false, disabled = false }: InputProps) => (
+export const Input = ({ label, type = 'text', value, onChange, placeholder, required = false, disabled = false, ...rest }: InputProps) => (
   <div className="med-input-group">
     {label && <label className="med-label">{label}</label>}
     <input
@@ -64,6 +64,7 @@ export const Input = ({ label, type = 'text', value, onChange, placeholder, requ
       placeholder={placeholder}
       required={required}
       disabled={disabled}
+      {...rest}
       className="med-input"
     />
   </div>
