@@ -11,7 +11,7 @@ export default function RegisterPage() {
     const [formData, setFormData] = useState({
         firstName: '', lastName: '', email: '', password: '',
         phone: '', dateOfBirth: '', gender: 'Other', address: '',
-        name: '', specialty: '', qualifications: '', bio: ''
+        name: '', specialty: '', qualifications: '', bio: '', consultationFee: ''
     });
     const [role, setRole] = useState<'patient' | 'doctor'>('patient');
     const [loading, setLoading] = useState(false);
@@ -29,6 +29,7 @@ export default function RegisterPage() {
                     specialty: formData.specialty,
                     qualifications: formData.qualifications.split(','),
                     bio: formData.bio,
+                    consultationFee: Number(formData.consultationFee || 0),
                     contact: { email: formData.email, phone: formData.phone },
                     password: formData.password
                 };
@@ -191,6 +192,15 @@ export default function RegisterPage() {
                                         </div>
                                     </div>
                                     <Input label="Qualifications (Comma separated)" name="qualifications" value={formData.qualifications} onChange={handleChange} placeholder="MBBS, MD, FACC" />
+                                    <Input
+                                        label="Consultation Fee (LKR)"
+                                        name="consultationFee"
+                                        type="number"
+                                        min="0"
+                                        value={formData.consultationFee}
+                                        onChange={handleChange}
+                                        placeholder="e.g. 2500"
+                                    />
                                     <div className="med-input-group">
                                         <label className="med-label">Professional Biography</label>
                                         <textarea name="bio" className="med-input" rows={3} value={formData.bio} onChange={handleChange} placeholder="Brief summary of your clinical expertise and background..." />

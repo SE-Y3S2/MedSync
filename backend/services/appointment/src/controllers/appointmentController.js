@@ -247,7 +247,11 @@ exports.updatePaymentStatus = async (req, res, next) => {
         appointment.paymentStatus = paymentStatus;
         if (paymentId) appointment.paymentId = paymentId;
 
-        // Removed auto-confirmation logic; appointment remains pending until doctor action.
+        // Auto-confirm immediately after successful payment unless appointment is already terminal.
+        if (paymentStatus === 'paid' && appointment.status === 'pending') {
+            appointment.status = 'confirmed';
+            appointment.notes = [appointment.notes, 'Auto-confirmed after payment success'].filter(Boolean).join(' | ');
+        }
 
         await appointment.save();
         res.json(appointment);

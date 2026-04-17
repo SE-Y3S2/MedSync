@@ -45,6 +45,8 @@ router.get('/:id/analytics', auth, doctorController.getAnalytics);
 // Availability
 router.get('/:id/availability', doctorController.getAvailability);
 router.post('/:id/availability', auth, doctorController.addAvailability);
+router.post('/:id/availability/bulk', auth, doctorController.addAvailabilityBulk);
+router.put('/:id/availability/:slotId', auth, doctorController.updateAvailability);
 router.delete('/:id/availability/:slotId', auth, doctorController.deleteAvailability);
 
 module.exports = router;

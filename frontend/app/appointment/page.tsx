@@ -54,13 +54,18 @@ export default function AppointmentListPage() {
     }, [patientId, authLoading, user]);
 
     const handlePayment = async (appt: Appointment) => {
+        const fee = Number(appt.consultationFee || 0);
+        if (fee <= 0) {
+            showToast('Doctor fee is not configured for this appointment.', 'warning');
+            return;
+        }
         try {
             const { url } = await paymentApi.createCheckoutSession({
                 appointmentId: appt._id,
                 patientId,
                 doctorId: appt.doctorId,
                 doctorName: appt.doctorName,
-                amount: appt.consultationFee || 500,
+                amount: fee,
             });
             window.location.href = url;
         } catch (err: any) {

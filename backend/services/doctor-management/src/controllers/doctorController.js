@@ -1,10 +1,14 @@
 const Doctor = require('../models/Doctor');
 const Prescription = require('../models/Prescription');
+const axios = require('axios');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const qrcode = require('qrcode');
 const crypto = require('crypto');
 const { sendEvent } = require('../utils/kafka');
+
+const APPOINTMENT_SERVICE_URL =
+  process.env.APPOINTMENT_SERVICE_URL || 'http://localhost:3003';
 
 if (!process.env.JWT_SECRET) {
   throw new Error('FATAL: JWT_SECRET is not set');
@@ -12,9 +16,38 @@ if (!process.env.JWT_SECRET) {
 const JWT_SECRET = process.env.JWT_SECRET;
 const JWT_EXPIRE = process.env.JWT_EXPIRE || '7d';
 
+const dayIndexToName = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+
+const isSameSlot = (slot, day, startTime, endTime) =>
+  slot.day === day && slot.startTime === startTime && slot.endTime === endTime;
+
+const dateToDayName = (slotDate) => {
+  const d = new Date(slotDate);
+  return dayIndexToName[d.getUTCDay()];
+};
+
+const getAppointmentsByStatus = async ({ doctorId, status, authHeader }) => {
+  const { data } = await axios.get(
+    `${APPOINTMENT_SERVICE_URL}/api/appointments/doctor/${doctorId}?status=${encodeURIComponent(status)}`,
+    { headers: authHeader ? { Authorization: authHeader } : undefined }
+  );
+  return Array.isArray(data) ? data : [];
+};
+
+const hasBookedOrConfirmedForSlot = async ({ doctorId, day, startTime, endTime, authHeader }) => {
+  const slotTime = `${startTime} - ${endTime}`;
+  const [pending, confirmed] = await Promise.all([
+    getAppointmentsByStatus({ doctorId, status: 'pending', authHeader }),
+    getAppointmentsByStatus({ doctorId, status: 'confirmed', authHeader }),
+  ]);
+
+  const all = [...pending, ...confirmed];
+  return all.some((appt) => appt.slotTime === slotTime && dateToDayName(appt.slotDate) === day);
+};
+
 exports.registerDoctor = async (req, res) => {
   try {
-    const { name, specialty, qualifications, contact, bio, password } = req.body;
+    const { name, specialty, qualifications, contact, bio, password, consultationFee } = req.body;
 
     if (!password || !contact || !contact.email) {
       return res.status(400).json({ message: 'Email and password are required.' });
@@ -47,6 +80,7 @@ exports.registerDoctor = async (req, res) => {
       qualifications: quals,
       contact,
       bio,
+      consultationFee: Number(consultationFee || 0),
       password: hashedPassword,
       isVerified: false,
     });
@@ -212,7 +246,7 @@ exports.addAvailability = async (req, res) => {
       return res.status(403).json({ message: 'Forbidden: You can only manage your own schedule.' });
     }
 
-    const { day, startTime, endTime, maxPatients } = req.body || {};
+    const { day, startTime, endTime } = req.body || {};
     if (!day || !startTime || !endTime) {
       return res.status(400).json({ message: 'day, startTime, and endTime are required.' });
     }
@@ -223,7 +257,13 @@ exports.addAvailability = async (req, res) => {
     const doctor = await Doctor.findById(req.params.id);
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
 
-    doctor.availability.push({ day, startTime, endTime, maxPatients });
+    const duplicate = doctor.availability.some((s) => isSameSlot(s, day, startTime, endTime));
+    if (duplicate) {
+      return res.status(409).json({ message: 'This weekly slot already exists.' });
+    }
+
+    // Product rule: one slot corresponds to one patient.
+    doctor.availability.push({ day, startTime, endTime, maxPatients: 1 });
     await doctor.save();
 
     await sendEvent('doctor-events', {
@@ -238,6 +278,108 @@ exports.addAvailability = async (req, res) => {
   }
 };
 
+exports.addAvailabilityBulk = async (req, res) => {
+  try {
+    if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.id) {
+      return res.status(403).json({ message: 'Forbidden: You can only manage your own schedule.' });
+    }
+
+    const { days, slots } = req.body || {};
+    if (!Array.isArray(days) || days.length === 0 || !Array.isArray(slots) || slots.length === 0) {
+      return res.status(400).json({ message: 'days[] and slots[] are required.' });
+    }
+
+    const doctor = await Doctor.findById(req.params.id);
+    if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+
+    let created = 0;
+    let skipped = 0;
+    const normalizedDays = [...new Set(days.map((d) => String(d).trim()))];
+
+    for (const day of normalizedDays) {
+      for (const slot of slots) {
+        const startTime = String(slot?.startTime || '').trim();
+        const endTime = String(slot?.endTime || '').trim();
+        if (!day || !startTime || !endTime || startTime >= endTime) {
+          skipped += 1;
+          continue;
+        }
+        const exists = doctor.availability.some((s) => isSameSlot(s, day, startTime, endTime));
+        if (exists) {
+          skipped += 1;
+          continue;
+        }
+
+        doctor.availability.push({ day, startTime, endTime, maxPatients: 1 });
+        created += 1;
+      }
+    }
+
+    await doctor.save();
+
+    await sendEvent('doctor-events', {
+      type: 'DOCTOR_AVAILABILITY_UPDATED',
+      doctorId: doctor._id,
+      timestamp: new Date(),
+    });
+
+    res.status(201).json({ created, skipped, availability: doctor.availability });
+  } catch (error) {
+    res.status(400).json({ message: error.message });
+  }
+};
+
+exports.updateAvailability = async (req, res) => {
+  try {
+    if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.id) {
+      return res.status(403).json({ message: "Forbidden: You cannot modify another doctor's availability." });
+    }
+
+    const { day, startTime, endTime } = req.body || {};
+    if (!day || !startTime || !endTime) {
+      return res.status(400).json({ message: 'day, startTime, and endTime are required.' });
+    }
+    if (startTime >= endTime) {
+      return res.status(400).json({ message: 'Start time must be before end time.' });
+    }
+
+    const doctor = await Doctor.findById(req.params.id);
+    if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+
+    const slot = doctor.availability.id(req.params.slotId);
+    if (!slot) return res.status(404).json({ message: 'Slot not found' });
+
+    const isLocked = await hasBookedOrConfirmedForSlot({
+      doctorId: req.params.id,
+      day: slot.day,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      authHeader: req.headers.authorization,
+    });
+    if (isLocked) {
+      return res.status(409).json({ message: 'This slot cannot be edited because it is already booked/confirmed.' });
+    }
+
+    const duplicate = doctor.availability.some(
+      (s) => String(s._id) !== String(slot._id) && isSameSlot(s, day, startTime, endTime)
+    );
+    if (duplicate) {
+      return res.status(409).json({ message: 'Another slot with the same day and time already exists.' });
+    }
+
+    slot.day = day;
+    slot.startTime = startTime;
+    slot.endTime = endTime;
+    slot.maxPatients = 1;
+    await doctor.save();
+
+    res.json({ message: 'Slot updated', availability: doctor.availability });
+  } catch (error) {
+    console.error('[Doctor Service] Update slot error:', error);
+    res.status(400).json({ message: error.message });
+  }
+};
+
 exports.deleteAvailability = async (req, res) => {
   try {
     if (req.user && req.user.role !== 'admin' && req.user.id !== req.params.id) {
@@ -246,6 +388,22 @@ exports.deleteAvailability = async (req, res) => {
 
     const doctor = await Doctor.findById(req.params.id);
     if (!doctor) return res.status(404).json({ message: 'Doctor not found' });
+
+    const slot = doctor.availability.id(req.params.slotId);
+    if (!slot) {
+      return res.status(404).json({ message: 'Slot not found' });
+    }
+
+    const isLocked = await hasBookedOrConfirmedForSlot({
+      doctorId: req.params.id,
+      day: slot.day,
+      startTime: slot.startTime,
+      endTime: slot.endTime,
+      authHeader: req.headers.authorization,
+    });
+    if (isLocked) {
+      return res.status(409).json({ message: 'This slot cannot be deleted because it is already booked/confirmed.' });
+    }
 
     const before = doctor.availability.length;
     doctor.availability.pull(req.params.slotId);

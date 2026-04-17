@@ -9,7 +9,7 @@ const availabilitySlotSchema = new mongoose.Schema(
     },
     startTime: { type: String, required: true },
     endTime: { type: String, required: true },
-    maxPatients: { type: Number, default: 5, min: 1 },
+    maxPatients: { type: Number, default: 1, min: 1 },
     isBooked: { type: Boolean, default: false },
   },
   { _id: true, timestamps: true }
